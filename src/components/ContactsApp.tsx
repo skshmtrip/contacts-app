@@ -22,7 +22,35 @@ interface BackgroundImage {
   top: number;
   rotate: number;
   size: number;
+  isVisible: boolean;
 }
+
+const BackgroundImageComponent = ({ img, idx }: { img: BackgroundImage; idx: number }) => {
+  if (!img.isVisible) return null;
+  
+  return (
+    <div
+      key={idx}
+      className="absolute opacity-20 pointer-events-none"
+      style={{
+        left: `${img.left}%`,
+        top: `${img.top}%`,
+        width: `${img.size}px`,
+        height: `${img.size}px`,
+        transform: `translate(-50%, -50%) rotate(${img.rotate}deg)`,
+      }}
+    >
+      <Image
+        src={`/jjba pics/${img.src}`}
+        alt="JJBA background"
+        fill
+        className="object-contain"
+        loading="lazy"
+        unoptimized
+      />
+    </div>
+  );
+};
 
 export default function ContactsApp() {
   const contactData = useMemo(() => ({
@@ -38,8 +66,8 @@ export default function ContactsApp() {
   useEffect(() => {
     // Generate random background images only on client after hydration
     // Create a grid of positions to avoid overlapping and going off-screen
-    const cols = 4;
-    const rows = 3;
+    const cols = 3;
+    const rows = 2;
     const images: BackgroundImage[] = [];
     const usedIndices = new Set<number>();
 
@@ -59,7 +87,8 @@ export default function ContactsApp() {
         left: (col + 0.5) * (100 / cols) + (Math.random() - 0.5) * 15,
         top: (row + 0.5) * (100 / rows) + (Math.random() - 0.5) * 15,
         rotate: Math.random() * 360 - 180,
-        size: 80 + Math.random() * 60, // Smaller sizes: 80-140px
+        size: 80 + Math.random() * 60,
+        isVisible: true,
       });
     }
     setBackgroundImages(images);
@@ -67,26 +96,9 @@ export default function ContactsApp() {
 
   return (
     <div className="min-h-screen bg-black p-6 flex items-center justify-center relative overflow-hidden">
-      {/* Background JJBA Images */}
+      {/* Background JJBA Images - Lazy loaded */}
       {backgroundImages.map((img, idx) => (
-        <div
-          key={idx}
-          className="absolute opacity-20 pointer-events-none"
-          style={{
-            left: `${img.left}%`,
-            top: `${img.top}%`,
-            width: `${img.size}px`,
-            height: `${img.size}px`,
-            transform: `translate(-50%, -50%) rotate(${img.rotate}deg)`,
-          }}
-        >
-          <Image
-            src={`/jjba pics/${img.src}`}
-            alt="JJBA background"
-            fill
-            className="object-contain"
-          />
-        </div>
+        <BackgroundImageComponent key={idx} img={img} idx={idx} />
       ))}
 
       <div className="w-full max-w-2xl relative z-10">
