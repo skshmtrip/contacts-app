@@ -94,6 +94,7 @@ export default function ContactsApp() {
       {/* Background JJBA Images - Lazy loaded */}
       {backgroundImages.map((img, idx) => (
         <BackgroundImageComponent key={idx} img={img} idx={idx} />
+      ))}
 
       <div className="w-full max-w-2xl relative z-10">
         <div className="text-center mb-12">
