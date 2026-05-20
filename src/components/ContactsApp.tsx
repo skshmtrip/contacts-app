@@ -2,17 +2,10 @@
 
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 
 const jjbaImages = [
   "1200px-Josuke_DU_Infobox_Manga.svg",
-  "151-1510645_unit-joseph-joestar-joseph-joestar.svg",
-  "164-1644255_unit-jonathan-joestar-jojo-jonathan-joestar-manga.svg",
-  "400px-Giorno_Giovanna_Infobox_Manga.svg",
-  "400px-Jodio_Joestar_Infobox_Manga.svg",
   "800px-Josuke_JJL_Infobox_Manga.svg",
-  "Jolyne_Infobox_Manga.svg",
-  "jotaro-kujostardust-crusadersjojos-bizarre-adventuretransparentmy-jojos-bizarre-adventure-11562915815zv7cmo7oie.svg",
   "NicePng_master-roshi-png_1667623.svg",
 ];
 
@@ -31,8 +24,10 @@ const BackgroundImageComponent = ({ img, idx }: { img: BackgroundImage; idx: num
   return (
     <div
       key={idx}
-      className="absolute opacity-20 pointer-events-none"
       style={{
+        position: "absolute",
+        opacity: 0.2,
+        pointerEvents: "none",
         left: `${img.left}%`,
         top: `${img.top}%`,
         width: `${img.size}px`,
@@ -44,7 +39,7 @@ const BackgroundImageComponent = ({ img, idx }: { img: BackgroundImage; idx: num
         src={`/jjba pics/${img.src}`}
         alt="JJBA background"
         fill
-        className="object-contain"
+        style={{ objectFit: "contain" }}
         loading="lazy"
         unoptimized
       />
@@ -54,7 +49,7 @@ const BackgroundImageComponent = ({ img, idx }: { img: BackgroundImage; idx: num
 
 export default function ContactsApp() {
   const contactData = useMemo(() => ({
-    email: "krishna.tripathi0710@gmail.com",
+    email: "contactskshmtrip@gmail.com",
     github: "skshmtrip",
     instagram: "stemsaksham",
     linkedin: "krishna-tripathi-009008274",
@@ -99,7 +94,6 @@ export default function ContactsApp() {
       {/* Background JJBA Images - Lazy loaded */}
       {backgroundImages.map((img, idx) => (
         <BackgroundImageComponent key={idx} img={img} idx={idx} />
-      ))}
 
       <div className="w-full max-w-2xl relative z-10">
         <div className="text-center mb-12">
