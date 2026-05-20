@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, useEffect, useMemo } from "react";
+import { Card, CardContent } from "./ui/card";
 
 const jjbaImages = [
   "1200px-Josuke_DU_Infobox_Manga.svg",
