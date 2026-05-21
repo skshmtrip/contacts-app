@@ -1,4 +1,4 @@
-#Saksham's Contacts Page
+Saksham's Contacts Page
 
 Hey ya'll! I made this page using Claude's Haiku 4.5 Agent and a lot of typescript. I used the sansdiego font as listed in the files of the repo, this is a free-licensed font; meaning there is no copyright issues with this.
 
