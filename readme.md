@@ -10,4 +10,4 @@ Hey ya'll! I made this page using Claude's Haiku 4.5 Agent and a lot of typescri
 + Cool little JJBA images tend to change position everytime you reset the page.
 + Reach out when you can!!!
 
-Check out the actual contacts page[Contact Saksham](https://contacts-app-eosin.vercel.app)
+Check out the actual contacts page[Contact Saksham] (https://contacts-app-eosin.vercel.app)
