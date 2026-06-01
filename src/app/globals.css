@@ -198,5 +198,19 @@
 
 .animate-gradient {
   background-size: 200% 200%;
+}
+
+/* Staggered animation delays */
+.delay-500 {
+  animation-delay: 500ms;
+}
+
+.delay-1000 {
+  animation-delay: 1000ms;
+}
+
+.delay-2000 {
+  animation-delay: 2000ms;
+}
   animation: gradient-shift 3s ease infinite;
 }
