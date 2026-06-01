@@ -27,7 +27,7 @@ export default function ContactsApp() {
     return () => clearInterval(timer);
   }, [characters.length]);
 
-  const ContactCard = ({ href, title, value, icon: Icon }) => (
+  const ContactCard = ({ href, title, value, icon: Icon }: { href: string; title: string; value: string; icon?: React.ComponentType<{ className: string }> }) => (
     <a 
       href={href}
       target={href.startsWith("http") ? "_blank" : undefined}
