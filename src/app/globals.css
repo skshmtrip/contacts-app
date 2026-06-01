@@ -212,5 +212,3 @@
 .delay-2000 {
   animation-delay: 2000ms;
 }
-  animation: gradient-shift 3s ease infinite;
-}
