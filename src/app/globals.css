@@ -116,8 +116,8 @@ a {
 
   /* Double-bezel nested shadows */
   .bezel-outer {
-    @apply border border-[#2a2a2a] rounded-2xl;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    @apply rounded-2xl;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
   }
 
   .bezel-inner {
