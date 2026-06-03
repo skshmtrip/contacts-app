@@ -43,6 +43,13 @@ const decodeText = (
   return () => cancelAnimationFrame(frameId);
 };
 
+let animeModulePromise: Promise<typeof import("animejs")> | undefined;
+
+const getAnime = () => {
+  animeModulePromise ??= import("animejs");
+  return animeModulePromise;
+};
+
 export default function ContactsApp() {
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
@@ -89,7 +96,7 @@ export default function ContactsApp() {
 
     const run = async () => {
       // Named imports: animejs v4 has no default export.
-      const { animate, stagger, spring } = await import("animejs");
+      const { animate, stagger, spring } = await getAnime();
 
       if (cancelled) return;
 
@@ -155,30 +162,64 @@ export default function ContactsApp() {
     let glowAnimation: { pause: () => void } | null = null;
 
     const onMove = async (e: MouseEvent) => {
-      const { animate } = await import("animejs");
+      const { animate } = await getAnime();
       const inner = el.querySelector<HTMLElement>(".bezel-inner");
+      const icon = el.querySelector<HTMLElement>(".icon-shell");
       if (!inner) return;
 
       const rect = el.getBoundingClientRect();
+      const pointerX = ((e.clientX - rect.left) / rect.width) * 100;
+      const pointerY = ((e.clientY - rect.top) / rect.height) * 100;
       const dx = (e.clientX - (rect.left + rect.width / 2)) / rect.width;
       const dy = (e.clientY - (rect.top + rect.height / 2)) / rect.height;
 
+      el.style.setProperty("--card-x", `${pointerX}%`);
+      el.style.setProperty("--card-y", `${pointerY}%`);
+
       animate(inner, {
-        rotateX: dy * -6,
-        rotateY: dx * 6,
-        translateX: dx * 4,
-        translateY: dy * 4,
-        ease: "easeOutElastic(1, 0.5)",
-        duration: 400,
+        rotateX: dy * -8,
+        rotateY: dx * 8,
+        translateX: dx * 6,
+        translateY: dy * 6,
+        ease: "easeOutElastic(1, 0.45)",
+        duration: 360,
       });
+
+      if (icon) {
+        animate(icon, {
+          translateX: dx * 8,
+          translateY: dy * 8,
+          rotateZ: dx * 8,
+          ease: "easeOutQuad",
+          duration: 240,
+        });
+      }
     };
 
     const onEnter = async () => {
-      const { animate } = await import("animejs");
+      const { animate, spring } = await getAnime();
+      const arrow = el.querySelector<HTMLElement>(".card-arrow");
+
+      animate(el, {
+        scale: 1.018,
+        translateY: -3,
+        ease: spring({ stiffness: 140, damping: 15 }),
+        duration: 520,
+      });
+
+      if (arrow) {
+        animate(arrow, {
+          translateX: [0, 8, 4],
+          opacity: [0.65, 1],
+          ease: "easeOutExpo",
+          duration: 520,
+        });
+      }
+
       glowAnimation = animate(el, {
         boxShadow: [
           "0 0 0px rgba(255,255,255,0.00)",
-          "0 0 28px rgba(255,255,255,0.07)",
+          "0 0 42px rgba(255,255,255,0.12)",
           "0 0 0px rgba(255,255,255,0.00)",
         ],
         ease: "easeInOutSine",
@@ -188,10 +229,16 @@ export default function ContactsApp() {
     };
 
     const onLeave = async () => {
-      const { animate, spring } = await import("animejs");
+      const { animate, spring } = await getAnime();
       if (glowAnimation) glowAnimation.pause();
 
       const inner = el.querySelector<HTMLElement>(".bezel-inner");
+      const icon = el.querySelector<HTMLElement>(".icon-shell");
+      const arrow = el.querySelector<HTMLElement>(".card-arrow");
+
+      el.style.setProperty("--card-x", "50%");
+      el.style.setProperty("--card-y", "50%");
+
       if (inner) {
         animate(inner, {
           rotateX: 0,
@@ -203,10 +250,31 @@ export default function ContactsApp() {
         });
       }
 
+      if (icon) {
+        animate(icon, {
+          translateX: 0,
+          translateY: 0,
+          rotateZ: 0,
+          ease: spring({ stiffness: 120, damping: 16 }),
+          duration: 520,
+        });
+      }
+
+      if (arrow) {
+        animate(arrow, {
+          translateX: 0,
+          opacity: 0.7,
+          duration: 260,
+          ease: "easeOutQuad",
+        });
+      }
+
       animate(el, {
+        scale: 1,
+        translateY: 0,
         boxShadow: "0 0 0px rgba(255,255,255,0.00)",
-        duration: 300,
-        ease: "easeOutQuad",
+        duration: 440,
+        ease: spring({ stiffness: 100, damping: 16 }),
       });
     };
 
