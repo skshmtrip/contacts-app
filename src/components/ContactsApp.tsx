@@ -48,101 +48,58 @@ export default function ContactsApp() {
     "/jjba pics/1200px-Josuke_DU_Infobox_Manga.svg",
   ];
 
-  // ── Anime.js animations ──────────────────────────────────────────────────
+  // ── Page-load animations ─────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
     const run = async () => {
-      // Dynamic import so SSR is never touched
-      const anime = (await import("animejs")).default;
+      // Named imports — animejs v4 has no default export
+      const { animate, stagger, spring, scrambleText } = await import("animejs");
 
       if (cancelled) return;
 
-      // ── 1. Text-scramble reveal on the headline ──────────────────────────
-      const headline = headlineRef.current;
-      if (headline) {
-        const finalText = "Let's connect.";
-        const chars = "!<>-_\\/[]{}—=+*^?#@$%&ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-        // Build an array of span elements, one per character (incl. spaces)
-        headline.innerHTML = "";
-        const spans: HTMLSpanElement[] = finalText.split("").map((ch) => {
-          const s = document.createElement("span");
-          s.style.opacity = "0";
-          s.style.display = "inline";
-          // Preserve spaces
-          s.textContent = ch === " " ? "\u00A0" : chars[Math.floor(Math.random() * chars.length)];
-          headline.appendChild(s);
-          return s;
+      // 1. Scramble-text reveal on headline (built-in v4 modifier)
+      if (headlineRef.current) {
+        animate(headlineRef.current, {
+          opacity: [0, 1],
+          duration: 100,
+          ease: "linear",
         });
-
-        // Stagger the reveal: each letter fades in and scrambles into place
-        spans.forEach((span, i) => {
-          const delay = i * 55;
-          const duration = 420;
-          const scrambleCycles = 7;
-
-          setTimeout(() => {
-            if (cancelled) return;
-
-            let frame = 0;
-            span.style.opacity = "1";
-
-            const tick = () => {
-              if (cancelled) return;
-              frame++;
-              if (frame < scrambleCycles) {
-                span.textContent =
-                  finalText[i] === " "
-                    ? "\u00A0"
-                    : chars[Math.floor(Math.random() * chars.length)];
-                setTimeout(tick, duration / scrambleCycles);
-              } else {
-                span.textContent = finalText[i] === " " ? "\u00A0" : finalText[i];
-              }
-            };
-            tick();
-          }, delay);
+        animate(headlineRef.current, {
+          modifier: scrambleText("Let's connect."),
+          duration: 900,
+          ease: "linear",
         });
       }
 
-      // ── 2. Subtitle fade-up ──────────────────────────────────────────────
+      // 2. Subtitle fade-up
       if (subtitleRef.current) {
-        anime({
-          targets: subtitleRef.current,
+        animate(subtitleRef.current, {
           opacity: [0, 1],
           translateY: [18, 0],
-          easing: "easeOutExpo",
+          ease: "easeOutExpo",
           duration: 900,
-          delay: contactLinks.length * 55 + 300,
+          delay: 600,
         });
       }
 
-      // ── 3. Cards staggered spring entrance ──────────────────────────────
+      // 3. Cards staggered spring entrance
       if (cardsRef.current) {
         const cards = cardsRef.current.querySelectorAll<HTMLElement>(".contact-card");
-        // Start them invisible/translated
-        cards.forEach((c) => {
-          (c as HTMLElement).style.opacity = "0";
-          (c as HTMLElement).style.transform = "translateY(28px)";
-        });
-
-        anime({
-          targets: cards,
+        animate(cards, {
           opacity: [0, 1],
           translateY: [28, 0],
-          easing: "spring(1, 80, 12, 0)",
-          delay: anime.stagger(90, { start: 700 }),
+          ease: spring({ stiffness: 80, damping: 12 }),
+          delay: stagger(90, { start: 700 }),
         });
       }
 
-      // ── 4. Footer fade in ────────────────────────────────────────────────
+      // 4. Footer fade-in
       if (footerRef.current) {
-        anime({
-          targets: footerRef.current,
+        animate(footerRef.current, {
           opacity: [0, 1],
           translateY: [10, 0],
-          easing: "easeOutCubic",
+          ease: "easeOutCubic",
           duration: 700,
           delay: 1500,
         });
@@ -150,92 +107,79 @@ export default function ContactsApp() {
     };
 
     run();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // ── Magnetic / tilt hover on each card ──────────────────────────────────
-  const attachMagnetic = async (el: HTMLDivElement | null) => {
+  // ── Per-card magnetic tilt + glow ────────────────────────────────────────
+  const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
-    const anime = (await import("animejs")).default;
 
-    const inner = el.querySelector<HTMLElement>(".bezel-inner");
-    if (!inner) return;
+    let glowAnimation: { pause: () => void } | null = null;
 
-    const onMove = (e: MouseEvent) => {
+    const onMove = async (e: MouseEvent) => {
+      const { animate } = await import("animejs");
+      const inner = el.querySelector<HTMLElement>(".bezel-inner");
+      if (!inner) return;
+
       const rect = el.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dx = (e.clientX - cx) / rect.width;
-      const dy = (e.clientY - cy) / rect.height;
+      const dx = (e.clientX - (rect.left + rect.width / 2)) / rect.width;
+      const dy = (e.clientY - (rect.top + rect.height / 2)) / rect.height;
 
-      anime({
-        targets: inner,
-        rotateX: dy * -6,   // subtle Y-axis tilt
-        rotateY: dx * 6,    // subtle X-axis tilt
+      animate(inner, {
+        rotateX: dy * -6,
+        rotateY: dx * 6,
         translateX: dx * 4,
         translateY: dy * 4,
-        easing: "easeOutElastic(1, 0.5)",
+        ease: "easeOutElastic(1, 0.5)",
         duration: 400,
       });
     };
 
-    const onLeave = () => {
-      anime({
-        targets: inner,
-        rotateX: 0,
-        rotateY: 0,
-        translateX: 0,
-        translateY: 0,
-        easing: "spring(1, 90, 14, 0)",
-        duration: 600,
+    const onEnter = async () => {
+      const { animate } = await import("animejs");
+      glowAnimation = animate(el, {
+        boxShadow: [
+          "0 0 0px rgba(255,255,255,0.00)",
+          "0 0 28px rgba(255,255,255,0.07)",
+          "0 0 0px rgba(255,255,255,0.00)",
+        ],
+        ease: "easeInOutSine",
+        duration: 1400,
+        loop: true,
+      });
+    };
+
+    const onLeave = async () => {
+      const { animate, spring } = await import("animejs");
+      if (glowAnimation) glowAnimation.pause();
+
+      const inner = el.querySelector<HTMLElement>(".bezel-inner");
+      if (inner) {
+        animate(inner, {
+          rotateX: 0,
+          rotateY: 0,
+          translateX: 0,
+          translateY: 0,
+          ease: spring({ stiffness: 90, damping: 14 }),
+          duration: 600,
+        });
+      }
+
+      animate(el, {
+        boxShadow: "0 0 0px rgba(255,255,255,0.00)",
+        duration: 300,
+        ease: "easeOutQuad",
       });
     };
 
     el.addEventListener("mousemove", onMove);
-    el.addEventListener("mouseleave", onLeave);
-
-    // Return cleanup so React doesn't leak listeners
-    return () => {
-      el.removeEventListener("mousemove", onMove);
-      el.removeEventListener("mouseleave", onLeave);
-    };
-  };
-
-  // ── Bezel glow pulse on hover ────────────────────────────────────────────
-  const attachGlow = async (el: HTMLDivElement | null) => {
-    if (!el) return;
-    const anime = (await import("animejs")).default;
-    let glowAnim: ReturnType<typeof anime> | null = null;
-
-    const onEnter = () => {
-      glowAnim = anime({
-        targets: el,
-        boxShadow: [
-          "0 0 0px rgba(255,255,255,0.00)",
-          "0 0 24px rgba(255,255,255,0.08)",
-          "0 0 0px rgba(255,255,255,0.00)",
-        ],
-        easing: "easeInOutSine",
-        duration: 1200,
-        loop: true,
-        direction: "normal",
-      });
-    };
-
-    const onLeave = () => {
-      if (glowAnim) { glowAnim.pause(); }
-      anime({
-        targets: el,
-        boxShadow: "0 0 0px rgba(255,255,255,0.00)",
-        duration: 300,
-        easing: "easeOutQuad",
-      });
-    };
-
     el.addEventListener("mouseenter", onEnter);
     el.addEventListener("mouseleave", onLeave);
 
     return () => {
+      el.removeEventListener("mousemove", onMove);
       el.removeEventListener("mouseenter", onEnter);
       el.removeEventListener("mouseleave", onLeave);
     };
@@ -277,9 +221,10 @@ export default function ContactsApp() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-[#050505] relative overflow-hidden flex items-center justify-center"
-      style={{ perspective: "1000px" }}>
-
+    <div
+      className="min-h-[100dvh] bg-[#050505] relative overflow-hidden flex items-center justify-center"
+      style={{ perspective: "1000px" }}
+    >
       {/* JoJo character accents */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {jjoCharacters.map((char, idx) => (
@@ -300,27 +245,23 @@ export default function ContactsApp() {
       </div>
 
       <div className="w-full max-w-2xl px-6 md:px-8 relative z-10">
-
         {/* Hero Section */}
         <div className="mb-20">
           <div className="space-y-6">
-            <div className="space-y-2">
-              {/* Headline — scramble target */}
-              <h1
-                ref={headlineRef}
-                className="text-6xl md:text-7xl font-serif font-light tracking-tight leading-tight text-white"
-                style={{ opacity: 1 }}
-              >
-                Let&apos;s connect.
-              </h1>
-            </div>
-
+            <h1
+              ref={headlineRef}
+              className="text-6xl md:text-7xl font-serif font-light tracking-tight leading-tight text-white"
+              style={{ opacity: 0 }}
+            >
+              Let&apos;s connect.
+            </h1>
             <p
               ref={subtitleRef}
               className="text-lg text-[#e0e0e0] leading-relaxed max-w-xl"
               style={{ opacity: 0 }}
             >
-              Reach out across your preferred platform. I&apos;m always interested in interesting projects, creative collaborations, and great conversations.
+              Reach out across your preferred platform. I&apos;m always interested
+              in interesting projects, creative collaborations, and great conversations.
             </p>
           </div>
         </div>
@@ -339,10 +280,7 @@ export default function ContactsApp() {
               <div
                 className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
                 style={{ transformStyle: "preserve-3d" }}
-                ref={(el) => {
-                  attachMagnetic(el);
-                  attachGlow(el);
-                }}
+                ref={setupCardEffects}
               >
                 <div className="bezel-inner p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -358,7 +296,6 @@ export default function ContactsApp() {
                       </p>
                     </div>
                   </div>
-
                   <div className="flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
