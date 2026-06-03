@@ -616,19 +616,23 @@ export default function ContactsApp() {
           <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-4 select-none">SPD</span>
         </div>
 
+
         {/* Floating Parallax Toggle */}
         <button 
           onClick={() => setIsParallaxEnabled(!isParallaxEnabled)}
-          className={`pointer-events-auto flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
+          className={`pointer-events-auto flex items-center justify-center px-4 h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
             isParallaxEnabled 
               ? "bg-white text-black border-white hover:bg-[#e0e0e0]" 
               : "bg-[#0a0a0a]/80 text-[#a0a0a0] border-[#2a2a2a] hover:border-[#4a4a4a] hover:text-white"
           }`}
           aria-label="Toggle Parallax"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
+          <span className="text-[11px] font-mono font-medium tracking-widest uppercase select-none mt-[1px]">
+            {isParallaxEnabled ? '3D: ON' : '3D: OFF'}
+          </span>
         </button>
       </div>
 
