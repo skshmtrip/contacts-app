@@ -61,15 +61,15 @@ const clamp = (value: number, min: number, max: number) => {
 };
 
 export default function ContactsApp() {
+  const mainWrapperRef = useRef<HTMLDivElement>(null);
+  const bgWrapperRef = useRef<HTMLDivElement>(null);
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLParagraphElement>(null);
-  const activeTiltCardRef = useRef<HTMLDivElement | null>(null);
+  
   const orientationStatusRef = useRef<OrientationStatus>("unknown");
   const orientationHandlerRef = useRef<((event: DeviceOrientationEvent) => void) | null>(null);
-  const orientationFrameRef = useRef<number | null>(null);
-  const latestOrientationRef = useRef<DeviceOrientationEvent | null>(null);
   const reducedMotionRef = useRef(false);
 
   const contactLinks: ContactLink[] = [
@@ -116,120 +116,143 @@ export default function ContactsApp() {
 
     return () => {
       mediaQuery.removeEventListener("change", syncReducedMotion);
-
       if (orientationHandlerRef.current) {
         window.removeEventListener("deviceorientation", orientationHandlerRef.current);
-      }
-
-      if (orientationFrameRef.current) {
-        cancelAnimationFrame(orientationFrameRef.current);
       }
     };
   }, []);
 
-  // iOS Safari requires explicit permission over HTTPS triggered via a clean click/tap gesture
+  // Securely request Safari permissions globally on first interaction
   const requestSafariPermission = async (): Promise<boolean> => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined" || orientationStatusRef.current !== "unknown") return false;
 
     const OrientationEvent = window.DeviceOrientationEvent as
       | DeviceOrientationEventWithPermission
       | undefined;
 
-    // Check if it's iOS Safari requesting permission
     if (OrientationEvent && typeof OrientationEvent.requestPermission === "function") {
       try {
         const permissionState = await OrientationEvent.requestPermission();
         orientationStatusRef.current = permissionState === "granted" ? "granted" : "denied";
+        if (permissionState === "granted") startGlobalDeviceTilt();
         return permissionState === "granted";
       } catch (error) {
-        console.error("DeviceOrientation permission request denied or failed:", error);
+        console.error("Permission request failed:", error);
         orientationStatusRef.current = "denied";
         return false;
       }
     } else {
-      // Android or desktop browsers that support orientation natively without dynamic popups
       orientationStatusRef.current = OrientationEvent ? "granted" : "unsupported";
+      if (OrientationEvent) startGlobalDeviceTilt();
       return !!OrientationEvent;
     }
   };
 
-  const startDeviceTilt = async (el: HTMLDivElement) => {
-    if (reducedMotionRef.current || orientationStatusRef.current === "denied" || orientationStatusRef.current === "unsupported") {
-      return false;
-    }
+  // Attach global click listener to trigger permission gracefully
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      if (orientationStatusRef.current === "unknown") {
+        requestSafariPermission();
+      }
+    };
+    window.addEventListener("click", handleGlobalClick, { once: true });
+    window.addEventListener("touchstart", handleGlobalClick, { once: true });
+    return () => {
+      window.removeEventListener("click", handleGlobalClick);
+      window.removeEventListener("touchstart", handleGlobalClick);
+    };
+  }, []);
 
-    activeTiltCardRef.current = el;
-    el.classList.add("is-tilting");
+  // ==========================================================================
+  // GLOBAL TILT ENGINE (Parallax)
+  // ==========================================================================
+  const startGlobalDeviceTilt = () => {
+    if (reducedMotionRef.current || orientationStatusRef.current === "denied") return;
 
     if (!orientationHandlerRef.current) {
-      orientationHandlerRef.current = (event: DeviceOrientationEvent) => {
-        latestOrientationRef.current = event;
+      orientationHandlerRef.current = async (event: DeviceOrientationEvent) => {
+        if (reducedMotionRef.current) return;
 
-        if (orientationFrameRef.current !== null) return;
+        // Base angles for standard handheld use (device held ~45deg up)
+        const gamma = clamp(event.gamma ?? 0, -35, 35);
+        const beta = clamp((event.beta ?? 0) - 45, -35, 35);
+        
+        // Normalize between -1 and 1
+        const dx = gamma / 35;
+        const dy = beta / 35;
 
-        orientationFrameRef.current = requestAnimationFrame(async () => {
-          orientationFrameRef.current = null;
+        const { animate } = await getAnime();
 
-          const card = activeTiltCardRef.current;
-          const orientation = latestOrientationRef.current;
-          if (!card || !orientation) return;
+        // Tilt the entire layout wrapper
+        if (mainWrapperRef.current) {
+          animate(mainWrapperRef.current, {
+            rotateX: dy * -12, // Max 12 degrees
+            rotateY: dx * 12,
+            duration: 400,
+            ease: "easeOutCubic",
+          });
+        }
 
-          // Normalize angles for a comfortable handheld tilt posture
-          const gamma = clamp(orientation.gamma ?? 0, -24, 24);
-          const beta = clamp((orientation.beta ?? 0) - 45, -24, 24);
-          const pointerX = clamp(50 + gamma * 1.35, 18, 82);
-          const pointerY = clamp(50 + beta * 1.05, 18, 82);
-          const inner = card.querySelector<HTMLElement>(".bezel-inner");
-          const icon = card.querySelector<HTMLElement>(".icon-shell");
-
-          card.style.setProperty("--card-x", `${pointerX}%`);
-          card.style.setProperty("--card-y", `${pointerY}%`);
-
-          const { animate } = await getAnime();
-
-          if (inner) {
-            animate(inner, {
-              rotateX: beta * -0.14,
-              rotateY: gamma * 0.16,
-              translateX: gamma * 0.18,
-              translateY: beta * 0.12,
-              duration: 220,
-              ease: "easeOutQuad",
-            });
-          }
-
-          if (icon) {
-            animate(icon, {
-              translateX: gamma * 0.18,
-              translateY: beta * 0.14,
-              rotateZ: gamma * 0.08,
-              duration: 220,
-              ease: "easeOutQuad",
-            });
-          }
-        });
+        // Shift background slightly opposite to emphasize depth
+        if (bgWrapperRef.current) {
+          animate(bgWrapperRef.current, {
+            translateX: dx * -30,
+            translateY: dy * -30,
+            duration: 400,
+            ease: "easeOutCubic",
+          });
+        }
       };
-
       window.addEventListener("deviceorientation", orientationHandlerRef.current);
     }
-
-    return true;
   };
 
-  // Page-load animations
+  // Mouse hover global tilt (for Desktop)
+  useEffect(() => {
+    const onGlobalPointerMove = async (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" || reducedMotionRef.current || orientationStatusRef.current === "granted") return;
+
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const dx = (e.clientX - cx) / cx;
+      const dy = (e.clientY - cy) / cy;
+
+      const { animate } = await getAnime();
+      
+      if (mainWrapperRef.current) {
+        animate(mainWrapperRef.current, {
+          rotateX: dy * -8,
+          rotateY: dx * 8,
+          duration: 600,
+          ease: "easeOutExpo",
+        });
+      }
+      if (bgWrapperRef.current) {
+        animate(bgWrapperRef.current, {
+          translateX: dx * -15,
+          translateY: dy * -15,
+          duration: 600,
+          ease: "easeOutExpo",
+        });
+      }
+    };
+
+    window.addEventListener("pointermove", onGlobalPointerMove);
+    return () => window.removeEventListener("pointermove", onGlobalPointerMove);
+  }, []);
+
+  // Page-load entrance animations
   useEffect(() => {
     let cancelled = false;
     let cancelDecode: (() => void) | undefined;
 
     const run = async () => {
       const { animate, stagger, spring } = await getAnime();
-
       if (cancelled) return;
 
       if (headlineRef.current) {
         const headline = headlineRef.current;
         const finalText = "Let's connect.";
-
         headline.textContent = "";
         animate(headline, {
           opacity: [0, 1],
@@ -277,29 +300,22 @@ export default function ContactsApp() {
     };
   }, []);
 
+  // Per-card lighting and interaction (minus the 3D physics)
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
 
     let glowAnimation: { pause: () => void } | null = null;
-    let tiltReleaseTimer: number | null = null;
 
     const setPointerLight = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
       const pointerX = ((clientX - rect.left) / rect.width) * 100;
       const pointerY = ((clientY - rect.top) / rect.height) * 100;
-
       el.style.setProperty("--card-x", `${pointerX}%`);
       el.style.setProperty("--card-y", `${pointerY}%`);
-
-      return {
-        dx: (clientX - (rect.left + rect.width / 2)) / rect.width,
-        dy: (clientY - (rect.top + rect.height / 2)) / rect.height,
-      };
     };
 
     const startGlow = async () => {
       if (glowAnimation) return;
-
       const { animate } = await getAnime();
       glowAnimation = animate(el, {
         boxShadow: [
@@ -319,43 +335,15 @@ export default function ContactsApp() {
       glowAnimation = null;
     };
 
-    const animatePointerTilt = async (dx: number, dy: number, duration = 360) => {
-      const { animate } = await getAnime();
-      const inner = el.querySelector<HTMLElement>(".bezel-inner");
-      const icon = el.querySelector<HTMLElement>(".icon-shell");
-      if (!inner) return;
-
-      animate(inner, {
-        rotateX: dy * -8,
-        rotateY: dx * 8,
-        translateX: dx * 6,
-        translateY: dy * 6,
-        ease: "easeOutElastic(1, 0.45)",
-        duration: duration,
-      });
-
-      if (icon) {
-        animate(icon, {
-          translateX: dx * 8,
-          translateY: dy * 8,
-          rotateZ: dx * 8,
-          ease: "easeOutQuad",
-          duration: Math.max(duration * 0.66, 240),
-        });
-      }
-    };
-
     const liftCard = async () => {
       const { animate, spring } = await getAnime();
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
-
       animate(el, {
         scale: 1.018,
         translateY: -3,
         ease: spring({ stiffness: 140, damping: 15 }),
         duration: 520,
       });
-
       if (arrow) {
         animate(arrow, {
           translateX: [0, 8, 4],
@@ -364,7 +352,6 @@ export default function ContactsApp() {
           duration: 520,
         });
       }
-
       startGlow();
     };
 
@@ -372,75 +359,30 @@ export default function ContactsApp() {
       const { animate, spring } = await getAnime();
       const icon = el.querySelector<HTMLElement>(".icon-shell");
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
-
       animate(el, {
         scale: 0.985,
         translateY: 1,
         ease: spring({ stiffness: 210, damping: 16 }),
         duration: 300,
       });
-
       if (icon) {
-        animate(icon, {
-          scale: [1, 1.12, 1.04],
-          duration: 360,
-          ease: "easeOutExpo",
-        });
+        animate(icon, { scale: [1, 1.12, 1.04], duration: 360, ease: "easeOutExpo" });
       }
-
       if (arrow) {
-        animate(arrow, {
-          translateX: [0, 10, 4],
-          opacity: [0.7, 1],
-          duration: 360,
-          ease: "easeOutExpo",
-        });
+        animate(arrow, { translateX: [0, 10, 4], opacity: [0.7, 1], duration: 360, ease: "easeOutExpo" });
       }
-
       startGlow();
     };
 
     const resetCard = async () => {
       const { animate, spring } = await getAnime();
       stopGlow();
-
-      const inner = el.querySelector<HTMLElement>(".bezel-inner");
-      const icon = el.querySelector<HTMLElement>(".icon-shell");
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
-
       el.style.setProperty("--card-x", "50%");
       el.style.setProperty("--card-y", "50%");
-
-      if (inner) {
-        animate(inner, {
-          rotateX: 0,
-          rotateY: 0,
-          translateX: 0,
-          translateY: 0,
-          ease: spring({ stiffness: 90, damping: 14 }),
-          duration: 600,
-        });
-      }
-
-      if (icon) {
-        animate(icon, {
-          translateX: 0,
-          translateY: 0,
-          rotateZ: 0,
-          ease: spring({ stiffness: 120, damping: 16 }),
-          duration: 520,
-        });
-      }
-
       if (arrow) {
-        animate(arrow, {
-          translateX: 0,
-          opacity: 0.7,
-          duration: 260,
-          ease: "easeOutQuad",
-        });
+        animate(arrow, { translateX: 0, opacity: 0.7, duration: 260, ease: "easeOutQuad" });
       }
-
       animate(el, {
         scale: 1,
         translateY: 0,
@@ -450,98 +392,19 @@ export default function ContactsApp() {
       });
     };
 
-    const releaseTouchCard = () => {
-      el.classList.remove("is-touching");
-
-      if (tiltReleaseTimer) {
-        window.clearTimeout(tiltReleaseTimer);
-      }
-
-      tiltReleaseTimer = window.setTimeout(() => {
-        if (activeTiltCardRef.current === el) {
-          activeTiltCardRef.current = null;
-          el.classList.remove("is-tilting");
-          resetCard();
-        }
-      }, 1100);
-    };
-
-    const onPointerMove = async (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return;
-      const { dx, dy } = setPointerLight(e.clientX, e.clientY);
-      animatePointerTilt(dx, dy);
-    };
-
-    const onPointerEnter = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return;
-      liftCard();
-    };
-
-    const onPointerLeave = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return;
-      resetCard();
-    };
-
-    const onPointerDown = async (e: PointerEvent) => {
-      const { dx, dy } = setPointerLight(e.clientX, e.clientY);
-
-      if (tiltReleaseTimer) {
-        window.clearTimeout(tiltReleaseTimer);
-        tiltReleaseTimer = null;
-      }
-
-      if (e.pointerType !== "mouse") {
-        el.classList.add("is-touching");
-        activeTiltCardRef.current = el;
-        el.setPointerCapture?.(e.pointerId);
-
-        // Safe mobile fallback if gyroscope has not been authorized yet
-        if (orientationStatusRef.current !== "granted") {
-          animatePointerTilt(dx * 0.65, dy * 0.65, 260);
-        } else {
-          startDeviceTilt(el);
-        }
-
-        pressCard();
-        return;
-      }
-
+    const onPointerMove = (e: PointerEvent) => setPointerLight(e.clientX, e.clientY);
+    const onPointerEnter = (e: PointerEvent) => { if (e.pointerType === "mouse") liftCard(); };
+    const onPointerLeave = (e: PointerEvent) => { if (e.pointerType === "mouse") resetCard(); };
+    const onPointerDown = (e: PointerEvent) => {
+      setPointerLight(e.clientX, e.clientY);
+      if (e.pointerType !== "mouse") el.classList.add("is-touching");
       pressCard();
     };
-
     const onPointerUp = (e: PointerEvent) => {
-      if (e.pointerType === "mouse") {
-        liftCard();
-        return;
-      }
-      releaseTouchCard();
+      if (e.pointerType === "mouse") { liftCard(); } 
+      else { el.classList.remove("is-touching"); setTimeout(resetCard, 300); }
     };
-
-    const onPointerCancel = () => {
-      el.classList.remove("is-touching", "is-tilting");
-
-      if (activeTiltCardRef.current === el) {
-        activeTiltCardRef.current = null;
-      }
-      resetCard();
-    };
-
-    // Explicit standard click handler to securely prompt Safari permission popup
-    const onClick = async (e: MouseEvent) => {
-      // If it's a mobile touch interaction and permission is undetermined, prompt now
-      if (orientationStatusRef.current === "unknown") {
-        e.preventDefault(); // Pause navigation to fire popup
-        const granted = await requestSafariPermission();
-        if (granted) {
-          await startDeviceTilt(el);
-        }
-        // Proceed with navigation after resolution
-        const anchor = el.closest("a");
-        if (anchor && anchor.href) {
-          window.open(anchor.href, anchor.target || "_self", anchor.rel || "");
-        }
-      }
-    };
+    const onPointerCancel = () => { el.classList.remove("is-touching"); resetCard(); };
 
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerenter", onPointerEnter);
@@ -549,20 +412,14 @@ export default function ContactsApp() {
     el.addEventListener("pointerdown", onPointerDown);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointercancel", onPointerCancel);
-    el.addEventListener("click", onClick);
 
     return () => {
-      if (tiltReleaseTimer) {
-        window.clearTimeout(tiltReleaseTimer);
-      }
-
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerenter", onPointerEnter);
       el.removeEventListener("pointerleave", onPointerLeave);
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerCancel);
-      el.removeEventListener("click", onClick);
     };
   };
 
@@ -604,10 +461,14 @@ export default function ContactsApp() {
   return (
     <div
       className="min-h-[100dvh] bg-[#050505] relative overflow-hidden flex items-center justify-center"
-      style={{ perspective: "1000px" }}
+      style={{ perspective: "1200px" }}
     >
-      {/* JoJo character accents */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Background layer mapped to separate ref to tilt opposite direction */}
+      <div 
+        ref={bgWrapperRef}
+        className="absolute inset-0 overflow-hidden pointer-events-none"
+        style={{ transform: "translateZ(-80px)", transformStyle: "preserve-3d" }}
+      >
         {jjoCharacters.map((char, idx) => (
           <div
             key={idx}
@@ -625,9 +486,15 @@ export default function ContactsApp() {
         ))}
       </div>
 
-      <div className="w-full max-w-2xl px-6 md:px-8 relative z-10">
-        {/* Hero Section */}
-        <div className="mb-20">
+      {/* Primary Parallax Wrapping Plane */}
+      <div 
+        ref={mainWrapperRef} 
+        className="w-full max-w-2xl px-6 md:px-8 relative z-10"
+        style={{ transformStyle: "preserve-3d", willChange: "transform" }}
+      >
+        
+        {/* Layer 1: Headline - Floats highest */}
+        <div className="mb-20" style={{ transform: "translateZ(40px)" }}>
           <div className="space-y-6">
             <h1
               ref={headlineRef}
@@ -647,8 +514,8 @@ export default function ContactsApp() {
           </div>
         </div>
 
-        {/* Contact Cards */}
-        <div ref={cardsRef} className="space-y-4">
+        {/* Layer 2: Cards - Floats slightly below text */}
+        <div ref={cardsRef} className="space-y-4" style={{ transform: "translateZ(20px)" }}>
           {contactLinks.map((link, idx) => (
             <a
               key={idx}
@@ -660,7 +527,6 @@ export default function ContactsApp() {
             >
               <div
                 className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-                style={{ transformStyle: "preserve-3d" }}
                 ref={setupCardEffects}
               >
                 <div className="bezel-inner p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
@@ -688,8 +554,8 @@ export default function ContactsApp() {
           ))}
         </div>
 
-        {/* Footer */}
-        <div className="mt-20">
+        {/* Layer 3: Footer - Sits flat */}
+        <div className="mt-20" style={{ transform: "translateZ(5px)" }}>
           <p
             ref={footerRef}
             className="text-sm text-[#a0a0a0] text-center"
@@ -698,6 +564,7 @@ export default function ContactsApp() {
             Built with intent. No spam, no vanity metrics.
           </p>
         </div>
+
       </div>
     </div>
   );
