@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface ContactLink {
   title: string;
@@ -34,17 +34,14 @@ const decodeText = (
       frameId = requestAnimationFrame(tick);
       return;
     }
-
     element.textContent = finalText;
   };
 
   frameId = requestAnimationFrame(tick);
-
   return () => cancelAnimationFrame(frameId);
 };
 
 let animeModulePromise: Promise<typeof import("animejs")> | undefined;
-
 const getAnime = () => {
   animeModulePromise ??= import("animejs");
   return animeModulePromise;
@@ -68,35 +65,24 @@ export default function ContactsApp() {
   const cardsRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLParagraphElement>(null);
   
+  // Parallax UI State
+  const [isParallaxEnabled, setIsParallaxEnabled] = useState(true);
+  const [parallaxSpeedPercent, setParallaxSpeedPercent] = useState(100);
+  
+  // Refs for event listeners to read latest state without re-binding
+  const parallaxSettings = useRef({ enabled: true, speedPercent: 100 });
   const orientationStatusRef = useRef<OrientationStatus>("unknown");
   const orientationHandlerRef = useRef<((event: DeviceOrientationEvent) => void) | null>(null);
   const reducedMotionRef = useRef(false);
+  
+  // Global pointer tracker to fix scroll-orb decoupling
+  const lastPointerRef = useRef({ x: 0, y: 0 });
 
   const contactLinks: ContactLink[] = [
-    {
-      title: "Email",
-      value: "contactskshmtrip@gmail.com",
-      href: "mailto:contactskshmtrip@gmail.com",
-      icon: "email",
-    },
-    {
-      title: "GitHub",
-      value: "@skshmtrip",
-      href: "https://github.com/skshmtrip",
-      icon: "github",
-    },
-    {
-      title: "LinkedIn",
-      value: "Saksham Tripathi",
-      href: "https://linkedin.com/in/krishna-tripathi-009008274",
-      icon: "linkedin",
-    },
-    {
-      title: "Instagram",
-      value: "@stemsaksham",
-      href: "https://instagram.com/stemsaksham",
-      icon: "instagram",
-    },
+    { title: "Email", value: "contactskshmtrip@gmail.com", href: "mailto:contactskshmtrip@gmail.com", icon: "email" },
+    { title: "GitHub", value: "@skshmtrip", href: "https://github.com/skshmtrip", icon: "github" },
+    { title: "LinkedIn", value: "Saksham Tripathi", href: "https://linkedin.com/in/krishna-tripathi-009008274", icon: "linkedin" },
+    { title: "Instagram", value: "@stemsaksham", href: "https://instagram.com/stemsaksham", icon: "instagram" },
   ];
 
   const jjoCharacters = [
@@ -105,12 +91,50 @@ export default function ContactsApp() {
     "/jjba pics/1200px-Josuke_DU_Infobox_Manga.svg",
   ];
 
+  // Keep refs in sync with state for event loops
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const syncReducedMotion = () => {
-      reducedMotionRef.current = mediaQuery.matches;
+    parallaxSettings.current = { enabled: isParallaxEnabled, speedPercent: parallaxSpeedPercent };
+    
+    // Reset global rotation if toggled off
+    if (!isParallaxEnabled) {
+      getAnime().then(({ animate }) => {
+        if (mainWrapperRef.current) animate(mainWrapperRef.current, { rotateX: 0, rotateY: 0, scale: 1, duration: 600, ease: "easeOutCubic" });
+        if (bgWrapperRef.current) animate(bgWrapperRef.current, { translateX: 0, translateY: 0, duration: 600, ease: "easeOutCubic" });
+      });
+    }
+  }, [isParallaxEnabled, parallaxSpeedPercent]);
+
+  // Global Pointer & Scroll tracking
+  useEffect(() => {
+    const trackPointer = (e: PointerEvent | TouchEvent) => {
+      if ('touches' in e && e.touches.length > 0) {
+        lastPointerRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if ('clientX' in e) {
+        lastPointerRef.current = { x: (e as PointerEvent).clientX, y: (e as PointerEvent).clientY };
+      }
+    };
+    
+    const trackScroll = () => {
+      window.dispatchEvent(new CustomEvent('update-orb-scroll'));
     };
 
+    window.addEventListener("pointermove", trackPointer, { passive: true });
+    window.addEventListener("touchstart", trackPointer, { passive: true });
+    window.addEventListener("touchmove", trackPointer, { passive: true });
+    window.addEventListener("scroll", trackScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointermove", trackPointer);
+      window.removeEventListener("touchstart", trackPointer);
+      window.removeEventListener("touchmove", trackPointer);
+      window.removeEventListener("scroll", trackScroll);
+    };
+  }, []);
+
+  // System Prefs
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncReducedMotion = () => { reducedMotionRef.current = mediaQuery.matches; };
     syncReducedMotion();
     mediaQuery.addEventListener("change", syncReducedMotion);
 
@@ -124,10 +148,7 @@ export default function ContactsApp() {
 
   const requestSafariPermission = async (): Promise<boolean> => {
     if (typeof window === "undefined" || orientationStatusRef.current !== "unknown") return false;
-
-    const OrientationEvent = window.DeviceOrientationEvent as
-      | DeviceOrientationEventWithPermission
-      | undefined;
+    const OrientationEvent = window.DeviceOrientationEvent as DeviceOrientationEventWithPermission | undefined;
 
     if (OrientationEvent && typeof OrientationEvent.requestPermission === "function") {
       try {
@@ -136,7 +157,6 @@ export default function ContactsApp() {
         if (permissionState === "granted") startGlobalDeviceTilt();
         return permissionState === "granted";
       } catch (error) {
-        console.error("Permission request failed:", error);
         orientationStatusRef.current = "denied";
         return false;
       }
@@ -149,9 +169,7 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const handleGlobalClick = () => {
-      if (orientationStatusRef.current === "unknown") {
-        requestSafariPermission();
-      }
+      if (orientationStatusRef.current === "unknown") requestSafariPermission();
     };
     window.addEventListener("click", handleGlobalClick, { once: true });
     window.addEventListener("touchstart", handleGlobalClick, { once: true });
@@ -161,18 +179,24 @@ export default function ContactsApp() {
     };
   }, []);
 
+  // Calculate dynamic duration: 1% = 25ms, 100% = 400ms
+  const getDynamicDuration = () => {
+    const speed = parallaxSettings.current.speedPercent;
+    return Math.round(25 + (speed - 1) * (375 / 99));
+  };
+
   const startGlobalDeviceTilt = () => {
     if (reducedMotionRef.current || orientationStatusRef.current === "denied") return;
 
     if (!orientationHandlerRef.current) {
       orientationHandlerRef.current = async (event: DeviceOrientationEvent) => {
-        if (reducedMotionRef.current) return;
+        if (reducedMotionRef.current || !parallaxSettings.current.enabled) return;
 
         const gamma = clamp(event.gamma ?? 0, -35, 35);
         const beta = clamp((event.beta ?? 0) - 45, -35, 35);
-        
         const dx = gamma / 35;
         const dy = beta / 35;
+        const dynamicDuration = getDynamicDuration();
 
         const { animate } = await getAnime();
 
@@ -181,16 +205,15 @@ export default function ContactsApp() {
             rotateX: dy * -12,
             rotateY: dx * 12,
             scale: 0.85,
-            duration: 50,
+            duration: dynamicDuration,
             ease: "easeOutCubic",
           });
         }
-
         if (bgWrapperRef.current) {
           animate(bgWrapperRef.current, {
             translateX: dx * -30,
             translateY: dy * -30,
-            duration: 50,
+            duration: dynamicDuration,
             ease: "easeOutCubic",
           });
         }
@@ -201,12 +224,13 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const onGlobalPointerMove = async (e: PointerEvent) => {
-      if (e.pointerType !== "mouse" || reducedMotionRef.current || orientationStatusRef.current === "granted") return;
+      if (e.pointerType !== "mouse" || reducedMotionRef.current || orientationStatusRef.current === "granted" || !parallaxSettings.current.enabled) return;
 
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
       const dx = (e.clientX - cx) / cx;
       const dy = (e.clientY - cy) / cy;
+      const dynamicDuration = getDynamicDuration();
 
       const { animate } = await getAnime();
       
@@ -215,7 +239,7 @@ export default function ContactsApp() {
           rotateX: dy * -8,
           rotateY: dx * 8,
           scale: 0.85,
-          duration: 50,
+          duration: dynamicDuration * 1.5, // Mouse movement naturally takes longer
           ease: "easeOutExpo",
         });
       }
@@ -223,7 +247,7 @@ export default function ContactsApp() {
         animate(bgWrapperRef.current, {
           translateX: dx * -15,
           translateY: dy * -15,
-          duration: 50,
+          duration: dynamicDuration * 1.5,
           ease: "easeOutExpo",
         });
       }
@@ -233,6 +257,7 @@ export default function ContactsApp() {
     return () => window.removeEventListener("pointermove", onGlobalPointerMove);
   }, []);
 
+  // Entrance animations
   useEffect(() => {
     let cancelled = false;
     let cancelDecode: (() => void) | undefined;
@@ -242,59 +267,28 @@ export default function ContactsApp() {
       if (cancelled) return;
 
       if (headlineRef.current) {
-        const headline = headlineRef.current;
-        const finalText = "Let's connect.";
-        headline.textContent = "";
-        animate(headline, {
-          opacity: [0, 1],
-          duration: 100,
-          ease: "linear",
-        });
-        cancelDecode = decodeText(headline, finalText);
+        headlineRef.current.textContent = "";
+        animate(headlineRef.current, { opacity: [0, 1], duration: 100, ease: "linear" });
+        cancelDecode = decodeText(headlineRef.current, "Let's connect.");
       }
 
-      if (subtitleRef.current) {
-        animate(subtitleRef.current, {
-          opacity: [0, 1],
-          translateY: [18, 0],
-          ease: "easeOutExpo",
-          duration: 900,
-          delay: 600,
-        });
-      }
-
+      if (subtitleRef.current) animate(subtitleRef.current, { opacity: [0, 1], translateY: [18, 0], ease: "easeOutExpo", duration: 900, delay: 600 });
       if (cardsRef.current) {
         const cards = cardsRef.current.querySelectorAll<HTMLElement>(".contact-card");
-        animate(cards, {
-          opacity: [0, 1],
-          translateY: [28, 0],
-          ease: spring({ stiffness: 80, damping: 12 }),
-          delay: stagger(90, { start: 700 }),
-        });
+        animate(cards, { opacity: [0, 1], translateY: [28, 0], ease: spring({ stiffness: 80, damping: 12 }), delay: stagger(90, { start: 700 }) });
       }
-
-      if (footerRef.current) {
-        animate(footerRef.current, {
-          opacity: [0, 1],
-          translateY: [10, 0],
-          ease: "easeOutCubic",
-          duration: 700,
-          delay: 1500,
-        });
-      }
+      if (footerRef.current) animate(footerRef.current, { opacity: [0, 1], translateY: [10, 0], ease: "easeOutCubic", duration: 700, delay: 1500 });
     };
 
     run();
-    return () => {
-      cancelled = true;
-      cancelDecode?.();
-    };
+    return () => { cancelled = true; cancelDecode?.(); };
   }, []);
 
+  // Card interaction logic
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
-
     let glowAnimation: { pause: () => void } | null = null;
+    let isCurrentlyTouching = false;
 
     const setPointerLight = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
@@ -304,18 +298,20 @@ export default function ContactsApp() {
       el.style.setProperty("--card-y", `${pointerY}%`);
     };
 
+    // Attach to global scroll dispatcher to continuously track light position
+    const handleScrollUpdate = () => {
+      if (isCurrentlyTouching || el.matches(':hover')) {
+        setPointerLight(lastPointerRef.current.x, lastPointerRef.current.y);
+      }
+    };
+    window.addEventListener('update-orb-scroll', handleScrollUpdate);
+
     const startGlow = async () => {
       if (glowAnimation) return;
       const { animate } = await getAnime();
       glowAnimation = animate(el, {
-        boxShadow: [
-          "0 0 0px rgba(255,255,255,0.00)",
-          "0 0 42px rgba(255,255,255,0.12)",
-          "0 0 0px rgba(255,255,255,0.00)",
-        ],
-        ease: "easeInOutSine",
-        duration: 1400,
-        loop: true,
+        boxShadow: ["0 0 0px rgba(255,255,255,0.00)", "0 0 42px rgba(255,255,255,0.12)", "0 0 0px rgba(255,255,255,0.00)"],
+        ease: "easeInOutSine", duration: 1400, loop: true,
       });
     };
 
@@ -328,20 +324,8 @@ export default function ContactsApp() {
     const liftCard = async () => {
       const { animate, spring } = await getAnime();
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
-      animate(el, {
-        scale: 1.018,
-        translateY: -3,
-        ease: spring({ stiffness: 140, damping: 15 }),
-        duration: 520,
-      });
-      if (arrow) {
-        animate(arrow, {
-          translateX: [0, 8, 4],
-          opacity: [0.65, 1],
-          ease: "easeOutExpo",
-          duration: 520,
-        });
-      }
+      animate(el, { scale: 1.018, translateY: -3, ease: spring({ stiffness: 140, damping: 15 }), duration: 520 });
+      if (arrow) animate(arrow, { translateX: [0, 8, 4], opacity: [0.65, 1], ease: "easeOutExpo", duration: 520 });
       startGlow();
     };
 
@@ -349,18 +333,9 @@ export default function ContactsApp() {
       const { animate, spring } = await getAnime();
       const icon = el.querySelector<HTMLElement>(".icon-shell");
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
-      animate(el, {
-        scale: 0.985,
-        translateY: 1,
-        ease: spring({ stiffness: 210, damping: 16 }),
-        duration: 300,
-      });
-      if (icon) {
-        animate(icon, { scale: [1, 1.12, 1.04], duration: 360, ease: "easeOutExpo" });
-      }
-      if (arrow) {
-        animate(arrow, { translateX: [0, 10, 4], opacity: [0.7, 1], duration: 360, ease: "easeOutExpo" });
-      }
+      animate(el, { scale: 0.985, translateY: 1, ease: spring({ stiffness: 210, damping: 16 }), duration: 300 });
+      if (icon) animate(icon, { scale: [1, 1.12, 1.04], duration: 360, ease: "easeOutExpo" });
+      if (arrow) animate(arrow, { translateX: [0, 10, 4], opacity: [0.7, 1], duration: 360, ease: "easeOutExpo" });
       startGlow();
     };
 
@@ -368,34 +343,44 @@ export default function ContactsApp() {
       const { animate, spring } = await getAnime();
       stopGlow();
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
+      isCurrentlyTouching = false;
       
-      // REMOVED the 50% coordinate resets here, so the light stays exactly where you left it!
+      // Notice: --card-x and --card-y are NO LONGER reset here, locking the light to its last location
 
-      if (arrow) {
-        animate(arrow, { translateX: 0, opacity: 0.7, duration: 260, ease: "easeOutQuad" });
-      }
+      if (arrow) animate(arrow, { translateX: 0, opacity: 0.7, duration: 260, ease: "easeOutQuad" });
       animate(el, {
-        scale: 1,
-        translateY: 0,
-        boxShadow: "0 0 0px rgba(255,255,255,0.00)",
-        duration: 440,
-        ease: spring({ stiffness: 100, damping: 16 }),
+        scale: 1, translateY: 0, boxShadow: "0 0 0px rgba(255,255,255,0.00)",
+        duration: 440, ease: spring({ stiffness: 100, damping: 16 }),
       });
     };
 
+    const releaseDiffuse = () => {
+      el.classList.remove("is-touching");
+      el.classList.add("is-diffusing");
+      setTimeout(() => el.classList.remove("is-diffusing"), 600); // Matches CSS transition length
+      resetCard();
+    };
+
     const onPointerMove = (e: PointerEvent) => setPointerLight(e.clientX, e.clientY);
-    const onPointerEnter = (e: PointerEvent) => { if (e.pointerType === "mouse") liftCard(); };
-    const onPointerLeave = (e: PointerEvent) => { if (e.pointerType === "mouse") resetCard(); };
+    const onPointerEnter = (e: PointerEvent) => { if (e.pointerType === "mouse") { el.classList.remove("is-diffusing"); liftCard(); } };
+    const onPointerLeave = (e: PointerEvent) => { if (e.pointerType === "mouse") releaseDiffuse(); };
+    
     const onPointerDown = (e: PointerEvent) => {
       setPointerLight(e.clientX, e.clientY);
-      if (e.pointerType !== "mouse") el.classList.add("is-touching");
+      el.classList.remove("is-diffusing");
+      if (e.pointerType !== "mouse") {
+        el.classList.add("is-touching");
+        isCurrentlyTouching = true;
+      }
       pressCard();
     };
+    
     const onPointerUp = (e: PointerEvent) => {
       if (e.pointerType === "mouse") { liftCard(); } 
-      else { el.classList.remove("is-touching"); setTimeout(resetCard, 300); }
+      else { releaseDiffuse(); }
     };
-    const onPointerCancel = () => { el.classList.remove("is-touching"); resetCard(); };
+    
+    const onPointerCancel = () => { releaseDiffuse(); };
 
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerenter", onPointerEnter);
@@ -405,6 +390,7 @@ export default function ContactsApp() {
     el.addEventListener("pointercancel", onPointerCancel);
 
     return () => {
+      window.removeEventListener('update-orb-scroll', handleScrollUpdate);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerenter", onPointerEnter);
       el.removeEventListener("pointerleave", onPointerLeave);
@@ -463,15 +449,7 @@ export default function ContactsApp() {
           <div
             key={idx}
             className="absolute opacity-[0.03] hover:opacity-[0.08] transition-opacity duration-500"
-            style={{
-              width: "10rem",
-              height: "10rem",
-              top: `${idx * 25}%`,
-              right: `${idx * 15}%`,
-              backgroundImage: `url(${char})`,
-              backgroundSize: "contain",
-              backgroundRepeat: "no-repeat",
-            }}
+            style={{ width: "10rem", height: "10rem", top: `${idx * 25}%`, right: `${idx * 15}%`, backgroundImage: `url(${char})`, backgroundSize: "contain", backgroundRepeat: "no-repeat" }}
           />
         ))}
       </div>
@@ -483,20 +461,11 @@ export default function ContactsApp() {
       >
         <div className="mb-20" style={{ transform: "translateZ(40px)" }}>
           <div className="space-y-6">
-            <h1
-              ref={headlineRef}
-              className="text-6xl md:text-7xl font-serif font-light tracking-tight leading-tight text-white"
-              style={{ opacity: 0 }}
-            >
+            <h1 ref={headlineRef} className="text-6xl md:text-7xl font-serif font-light tracking-tight leading-tight text-white" style={{ opacity: 0 }}>
               Let&apos;s connect.
             </h1>
-            <p
-              ref={subtitleRef}
-              className="text-lg text-[#e0e0e0] leading-relaxed max-w-xl"
-              style={{ opacity: 0 }}
-            >
-              Reach out across your preferred platform. I&apos;m always interested
-              in interesting projects, creative collaborations, and great conversations.
+            <p ref={subtitleRef} className="text-lg text-[#e0e0e0] leading-relaxed max-w-xl" style={{ opacity: 0 }}>
+              Reach out across your preferred platform. I&apos;m always interested in interesting projects, creative collaborations, and great conversations.
             </p>
           </div>
         </div>
@@ -504,29 +473,18 @@ export default function ContactsApp() {
         <div ref={cardsRef} className="space-y-4" style={{ transform: "translateZ(20px)" }}>
           {contactLinks.map((link, idx) => (
             <a
-              key={idx}
-              href={link.href}
-              target={link.href.startsWith("http") ? "_blank" : undefined}
-              rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
-              className="contact-card block group transition-all duration-300"
-              style={{ opacity: 0 }}
+              key={idx} href={link.href} target={link.href.startsWith("http") ? "_blank" : undefined} rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+              className="contact-card block group transition-all duration-300" style={{ opacity: 0 }}
             >
-              <div
-                className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-                ref={setupCardEffects}
-              >
+              <div className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]" ref={setupCardEffects}>
                 <div className="bezel-inner p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="icon-shell flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] group-hover:border-[#3a3a3a] transition-colors duration-300 text-white">
                       <IconComponent type={link.icon} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs uppercase tracking-wider text-[#a0a0a0] font-medium mb-1">
-                        {link.title}
-                      </p>
-                      <p className="text-base text-white font-medium truncate">
-                        {link.value}
-                      </p>
+                      <p className="text-xs uppercase tracking-wider text-[#a0a0a0] font-medium mb-1">{link.title}</p>
+                      <p className="text-base text-white font-medium truncate">{link.value}</p>
                     </div>
                   </div>
                   <div className="card-arrow flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
@@ -541,16 +499,53 @@ export default function ContactsApp() {
         </div>
 
         <div className="mt-20" style={{ transform: "translateZ(5px)" }}>
-          <p
-            ref={footerRef}
-            className="text-sm text-[#a0a0a0] text-center"
-            style={{ opacity: 0 }}
-          >
+          <p ref={footerRef} className="text-sm text-[#a0a0a0] text-center" style={{ opacity: 0 }}>
             Built with intent. No spam, no vanity metrics.
           </p>
         </div>
-
       </div>
+
+      {/* Floating Settings Panel */}
+      <div className="fixed bottom-6 right-6 z-50 flex items-end gap-3 pointer-events-none">
+        
+        {/* Vertical Slider (Locked if Parallax is ON) */}
+        <div 
+          className={`bg-[#0a0a0a]/80 backdrop-blur-md p-3 pb-4 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center justify-end h-[160px] w-[48px] ${
+            isParallaxEnabled ? "opacity-30 grayscale cursor-not-allowed" : "opacity-100 hover:border-[#4a4a4a]"
+          }`}
+        >
+          <input 
+            type="range" 
+            min="1" 
+            max="100" 
+            value={parallaxSpeedPercent} 
+            onChange={(e) => setParallaxSpeedPercent(Number(e.target.value))}
+            disabled={isParallaxEnabled}
+            className="w-[120px] h-1 -rotate-90 origin-center bg-[#2a2a2a] rounded-lg appearance-none cursor-pointer outline-none mb-12"
+            style={{
+              accentColor: "#ffffff",
+              pointerEvents: isParallaxEnabled ? "none" : "auto"
+            }}
+          />
+          <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-auto">Spd</span>
+        </div>
+
+        {/* Parallax Toggle */}
+        <button 
+          onClick={() => setIsParallaxEnabled(!isParallaxEnabled)}
+          className={`pointer-events-auto flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
+            isParallaxEnabled 
+              ? "bg-white text-black border-white hover:bg-[#e0e0e0]" 
+              : "bg-[#0a0a0a]/80 text-[#a0a0a0] border-[#2a2a2a] hover:border-[#4a4a4a] hover:text-white"
+          }`}
+          aria-label="Toggle Parallax"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
+      </div>
+
     </div>
   );
 }
