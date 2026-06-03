@@ -122,7 +122,6 @@ export default function ContactsApp() {
     };
   }, []);
 
-  // Securely request Safari permissions globally on first interaction
   const requestSafariPermission = async (): Promise<boolean> => {
     if (typeof window === "undefined" || orientationStatusRef.current !== "unknown") return false;
 
@@ -148,7 +147,6 @@ export default function ContactsApp() {
     }
   };
 
-  // Attach global click listener to trigger permission gracefully
   useEffect(() => {
     const handleGlobalClick = () => {
       if (orientationStatusRef.current === "unknown") {
@@ -163,9 +161,6 @@ export default function ContactsApp() {
     };
   }, []);
 
-  // ==========================================================================
-  // GLOBAL TILT ENGINE (Parallax)
-  // ==========================================================================
   const startGlobalDeviceTilt = () => {
     if (reducedMotionRef.current || orientationStatusRef.current === "denied") return;
 
@@ -173,33 +168,29 @@ export default function ContactsApp() {
       orientationHandlerRef.current = async (event: DeviceOrientationEvent) => {
         if (reducedMotionRef.current) return;
 
-        // Base angles for standard handheld use (device held ~45deg up)
         const gamma = clamp(event.gamma ?? 0, -35, 35);
         const beta = clamp((event.beta ?? 0) - 45, -35, 35);
         
-        // Normalize between -1 and 1
         const dx = gamma / 35;
         const dy = beta / 35;
 
         const { animate } = await getAnime();
 
-        // Tilt the entire layout wrapper and maintain the 0.85 scale buffer
         if (mainWrapperRef.current) {
           animate(mainWrapperRef.current, {
-            rotateX: dy * -12, // Max 12 degrees
+            rotateX: dy * -12,
             rotateY: dx * 12,
-            scale: 0.85, // Keeps everything safely inside the viewport
-            duration: 100,
+            scale: 0.85,
+            duration: 400,
             ease: "easeOutCubic",
           });
         }
 
-        // Shift background slightly opposite to emphasize depth
         if (bgWrapperRef.current) {
           animate(bgWrapperRef.current, {
             translateX: dx * -30,
             translateY: dy * -30,
-            duration: 100,
+            duration: 400,
             ease: "easeOutCubic",
           });
         }
@@ -208,7 +199,6 @@ export default function ContactsApp() {
     }
   };
 
-  // Mouse hover global tilt (for Desktop)
   useEffect(() => {
     const onGlobalPointerMove = async (e: PointerEvent) => {
       if (e.pointerType !== "mouse" || reducedMotionRef.current || orientationStatusRef.current === "granted") return;
@@ -224,7 +214,7 @@ export default function ContactsApp() {
         animate(mainWrapperRef.current, {
           rotateX: dy * -8,
           rotateY: dx * 8,
-          scale: 0.85, // Keeps everything safely inside the viewport
+          scale: 0.85,
           duration: 600,
           ease: "easeOutExpo",
         });
@@ -243,7 +233,6 @@ export default function ContactsApp() {
     return () => window.removeEventListener("pointermove", onGlobalPointerMove);
   }, []);
 
-  // Page-load entrance animations
   useEffect(() => {
     let cancelled = false;
     let cancelDecode: (() => void) | undefined;
@@ -302,7 +291,6 @@ export default function ContactsApp() {
     };
   }, []);
 
-  // Per-card lighting and interaction (minus the 3D physics)
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
 
@@ -380,8 +368,9 @@ export default function ContactsApp() {
       const { animate, spring } = await getAnime();
       stopGlow();
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
-      el.style.setProperty("--card-x", "50%");
-      el.style.setProperty("--card-y", "50%");
+      
+      // REMOVED the 50% coordinate resets here, so the light stays exactly where you left it!
+
       if (arrow) {
         animate(arrow, { translateX: 0, opacity: 0.7, duration: 260, ease: "easeOutQuad" });
       }
@@ -465,7 +454,6 @@ export default function ContactsApp() {
       className="min-h-[100dvh] bg-[#050505] relative overflow-hidden flex items-center justify-center"
       style={{ perspective: "1600px" }}
     >
-      {/* Background layer mapped to separate ref to tilt opposite direction */}
       <div 
         ref={bgWrapperRef}
         className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -488,14 +476,11 @@ export default function ContactsApp() {
         ))}
       </div>
 
-      {/* Primary Parallax Wrapping Plane - Initialized with scale(0.85) buffer */}
       <div 
         ref={mainWrapperRef} 
         className="w-full max-w-2xl px-6 md:px-8 relative z-10"
         style={{ transformStyle: "preserve-3d", willChange: "transform", transform: "scale(0.85)" }}
       >
-        
-        {/* Layer 1: Headline - Floats highest */}
         <div className="mb-20" style={{ transform: "translateZ(40px)" }}>
           <div className="space-y-6">
             <h1
@@ -516,7 +501,6 @@ export default function ContactsApp() {
           </div>
         </div>
 
-        {/* Layer 2: Cards - Floats slightly below text */}
         <div ref={cardsRef} className="space-y-4" style={{ transform: "translateZ(20px)" }}>
           {contactLinks.map((link, idx) => (
             <a
@@ -556,7 +540,6 @@ export default function ContactsApp() {
           ))}
         </div>
 
-        {/* Layer 3: Footer - Sits flat */}
         <div className="mt-20" style={{ transform: "translateZ(5px)" }}>
           <p
             ref={footerRef}
