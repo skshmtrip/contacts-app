@@ -95,11 +95,25 @@ export default function ContactsApp() {
   useEffect(() => {
     parallaxSettings.current = { enabled: isParallaxEnabled, speedPercent: parallaxSpeedPercent };
     
-    // Reset global rotation and lock scale back to 1 if toggled off
+    // Smoothly settle layout positions to dead center when toggled off
     if (!isParallaxEnabled) {
       getAnime().then(({ animate }) => {
-        if (mainWrapperRef.current) animate(mainWrapperRef.current, { rotateX: 0, rotateY: 0, scale: 1, duration: 600, ease: "easeOutCubic" });
-        if (bgWrapperRef.current) animate(bgWrapperRef.current, { translateX: 0, translateY: 0, duration: 600, ease: "easeOutCubic" });
+        if (mainWrapperRef.current) {
+          animate(mainWrapperRef.current, { 
+            rotateX: 0, 
+            rotateY: 0, 
+            duration: 500, 
+            ease: "easeOutCubic" 
+          });
+        }
+        if (bgWrapperRef.current) {
+          animate(bgWrapperRef.current, { 
+            translateX: 0, 
+            translateY: 0, 
+            duration: 500, 
+            ease: "easeOutCubic" 
+          });
+        }
       });
     }
   }, [isParallaxEnabled, parallaxSpeedPercent]);
@@ -169,7 +183,10 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const handleGlobalClick = () => {
-      if (orientationStatusRef.current === "unknown") requestSafariPermission();
+      // Guard activation checks against current tracking state
+      if (orientationStatusRef.current === "unknown" && parallaxSettings.current.enabled) {
+        requestSafariPermission();
+      }
     };
     window.addEventListener("click", handleGlobalClick, { once: true });
     window.addEventListener("touchstart", handleGlobalClick, { once: true });
@@ -204,7 +221,6 @@ export default function ContactsApp() {
           animate(mainWrapperRef.current, {
             rotateX: dy * -12,
             rotateY: dx * 12,
-            scale: 0.85,
             duration: dynamicDuration,
             ease: "easeOutCubic",
           });
@@ -238,7 +254,6 @@ export default function ContactsApp() {
         animate(mainWrapperRef.current, {
           rotateX: dy * -8,
           rotateY: dx * 8,
-          scale: 0.85,
           duration: dynamicDuration * 1.5,
           ease: "easeOutExpo",
         });
@@ -298,7 +313,6 @@ export default function ContactsApp() {
       el.style.setProperty("--card-y", `${pointerY}%`);
     };
 
-    // Attach to global scroll dispatcher to continuously track light position
     const handleScrollUpdate = () => {
       if (isCurrentlyTouching || el.matches(':hover')) {
         setPointerLight(lastPointerRef.current.x, lastPointerRef.current.y);
