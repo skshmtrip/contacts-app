@@ -95,13 +95,14 @@ export default function ContactsApp() {
   useEffect(() => {
     parallaxSettings.current = { enabled: isParallaxEnabled, speedPercent: parallaxSpeedPercent };
     
-    // Smoothly settle layout positions to dead center when toggled off
+    // Settle rotation back to origin when toggled off without scaling shifts
     if (!isParallaxEnabled) {
       getAnime().then(({ animate }) => {
         if (mainWrapperRef.current) {
           animate(mainWrapperRef.current, { 
             rotateX: 0, 
             rotateY: 0, 
+            scale: 0.85,
             duration: 500, 
             ease: "easeOutCubic" 
           });
@@ -183,7 +184,6 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const handleGlobalClick = () => {
-      // Guard activation checks against current tracking state
       if (orientationStatusRef.current === "unknown" && parallaxSettings.current.enabled) {
         requestSafariPermission();
       }
@@ -221,6 +221,7 @@ export default function ContactsApp() {
           animate(mainWrapperRef.current, {
             rotateX: dy * -12,
             rotateY: dx * 12,
+            scale: 0.85,
             duration: dynamicDuration,
             ease: "easeOutCubic",
           });
@@ -254,6 +255,7 @@ export default function ContactsApp() {
         animate(mainWrapperRef.current, {
           rotateX: dy * -8,
           rotateY: dx * 8,
+          scale: 0.85,
           duration: dynamicDuration * 1.5,
           ease: "easeOutExpo",
         });
@@ -520,26 +522,28 @@ export default function ContactsApp() {
       {/* Floating Settings Panel */}
       <div className="fixed bottom-6 right-6 z-50 flex items-end gap-3 pointer-events-none">
         
-        {/* Vertical Slider Container */}
+        {/* Symmetrical Vertical Slider Container */}
         <div 
-          className={`bg-[#0a0a0a]/80 backdrop-blur-md p-3 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[180px] w-[52px] ${
+          className={`bg-[#0a0a0a]/80 backdrop-blur-md px-3 pt-6 pb-4 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[200px] w-[52px] ${
             isParallaxEnabled ? "opacity-40" : "opacity-100"
           }`}
         >
-          <input 
-            type="range" 
-            min="1" 
-            max="100" 
-            value={parallaxSpeedPercent} 
-            onChange={(e) => setParallaxSpeedPercent(Number(e.target.value))}
-            disabled={isParallaxEnabled}
-            className="w-[140px] h-1 -rotate-90 origin-center bg-[#2a2a2a] rounded-lg appearance-none cursor-pointer outline-none mt-12"
-            style={{
-              accentColor: "#ffffff",
-              pointerEvents: isParallaxEnabled ? "none" : "auto"
-            }}
-          />
-          <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-auto">SPD</span>
+          <div className="relative flex-1 w-full flex items-center justify-center">
+            <input 
+              type="range" 
+              min="1" 
+              max="100" 
+              value={parallaxSpeedPercent} 
+              onChange={(e) => setParallaxSpeedPercent(Number(e.target.value))}
+              disabled={isParallaxEnabled}
+              className="absolute w-[130px] h-1 -rotate-90 origin-center bg-[#2a2a2a] rounded-lg appearance-none cursor-pointer outline-none"
+              style={{
+                accentColor: "#ffffff",
+                pointerEvents: isParallaxEnabled ? "none" : "auto"
+              }}
+            />
+          </div>
+          <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-4 select-none">SPD</span>
         </div>
 
         {/* Parallax Toggle */}
