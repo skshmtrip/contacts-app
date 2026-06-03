@@ -74,6 +74,7 @@ export default function ContactsApp() {
   const orientationStatusRef = useRef<OrientationStatus>("unknown");
   const orientationHandlerRef = useRef<((event: DeviceOrientationEvent) => void) | null>(null);
   const reducedMotionRef = useRef(false);
+  const isGyroActiveRef = useRef(false);
   
   // Global pointer tracker to fix scroll-orb decoupling
   const lastPointerRef = useRef({ x: 0, y: 0 });
@@ -209,10 +210,16 @@ export default function ContactsApp() {
 
     if (!orientationHandlerRef.current) {
       orientationHandlerRef.current = async (event: DeviceOrientationEvent) => {
+        // Bail out immediately if there is no real hardware data.
+        if (event.gamma === null || event.beta === null) return;
+        
+        // Flag that real mobile tilt data is actively streaming
+        isGyroActiveRef.current = true;
+
         if (reducedMotionRef.current || !parallaxSettings.current.enabled) return;
 
-        const gamma = clamp(event.gamma ?? 0, -35, 35);
-        const beta = clamp((event.beta ?? 0) - 45, -35, 35);
+        const gamma = clamp(event.gamma, -35, 35);
+        const beta = clamp(event.beta - 45, -35, 35);
         const dx = gamma / 35;
         const dy = beta / 35;
         const dynamicDuration = getDynamicDuration();
@@ -243,14 +250,18 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const onGlobalPointerMove = async (e: PointerEvent) => {
-      // FIX: Check e.buttons === 0 to ignore active text dragging/selections on the PC background canvas.
+      // If a physical mouse is moving, we ALWAYS track it.
       if (
         e.pointerType !== "mouse" || 
         e.buttons !== 0 || 
         reducedMotionRef.current || 
-        orientationStatusRef.current === "granted" || 
         !parallaxSettings.current.enabled
       ) return;
+
+      // If we detect a mouse moving, we explicitly tell the gyro to stand down.
+      if (isGyroActiveRef.current) {
+         isGyroActiveRef.current = false;
+      }
 
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
@@ -389,6 +400,7 @@ export default function ContactsApp() {
     const onPointerLeave = (e: PointerEvent) => { if (e.pointerType === "mouse") releaseDiffuse(); };
     
     const onPointerDown = (e: PointerEvent) => {
+      el.setPointerCapture(e.pointerId); 
       setPointerLight(e.clientX, e.clientY);
       el.classList.remove("is-diffusing");
       if (e.pointerType !== "mouse") {
@@ -399,6 +411,9 @@ export default function ContactsApp() {
     };
     
     const onPointerUp = (e: PointerEvent) => {
+      if (el.hasPointerCapture(e.pointerId)) {
+        el.releasePointerCapture(e.pointerId); 
+      }
       if (e.pointerType === "mouse") { liftCard(); } 
       else { releaseDiffuse(); }
     };
@@ -463,7 +478,6 @@ export default function ContactsApp() {
       className="min-h-[100dvh] bg-[#050505] relative overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row items-center justify-start md:justify-center p-6 md:p-0 select-none touch-action-none"
       style={{ perspective: "1600px" }}
       onPointerLeave={() => {
-        // FIX: Triggers immediate matrix recovery when the mouse exits the desktop browser viewport bounds completely.
         if (parallaxSettings.current.enabled) resetParallaxPosition();
       }}
     >
