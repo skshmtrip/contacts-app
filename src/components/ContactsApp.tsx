@@ -199,10 +199,11 @@ export default function ContactsApp() {
     };
   }, []);
 
-  // Calculate dynamic duration: 1% = 25ms, 100% = 400ms
+  // Calculate dynamic duration: 100% = 25ms (fastest), 1% = 400ms (slowest)
   const getDynamicDuration = () => {
     const speed = parallaxSettings.current.speedPercent;
-    return Math.round(25 + (speed - 1) * (375 / 99));
+    // We invert the math: subtract the speed factor from the maximum duration (400ms)
+    return Math.round(400 - (speed - 1) * (375 / 99));
   };
 
   const startGlobalDeviceTilt = () => {
