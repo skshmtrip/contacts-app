@@ -1,190 +1,101 @@
-# Contacts App - Project Context
+# Contacts Application and Anime.js v4 Integration Context
 
-## Project Overview
-**Contacts App** is a personal contacts page built with Next.js 16 and React 19, featuring a modern, animated UI with JJBA (JoJo's Bizarre Adventure) themed images. The site displays contact information with interactive cards and dynamically rotating character images.
-
-**Live URL:** https://contacts-app-eosin.vercel.app
+This document outlines the codebase, the technical challenges faced during development, and the precise solutions implemented to migrate the project's interactive animations to Anime.js v4.
 
 ---
 
-## Tech Stack
+## 1. Project Overview
 
-### Framework & Runtime
-- **Next.js**: 16.2.4 (with Turbopack)
-- **React**: 19.2.4
-- **TypeScript**: ^5
-- **Node.js**: Latest (for development)
+The project is a premium, minimalist personal contacts page built using Next.js App Router, TypeScript, Tailwind CSS, and Anime.js v4.
 
-### UI & Styling
-- **Tailwind CSS**: ^4.3.0 (@tailwindcss/postcss)
-- **Radix UI**: @radix-ui/react-slot ^1.2.4
-- **CSS Utilities**: 
-  - `clsx` ^2.1.1 - Conditional CSS class handling
-  - `tailwind-merge` ^3.6.0 - Merging Tailwind classes
+### Core Aesthetic and Theme
 
-### Development & Tooling
-- **ESLint**: ^9 with next config
-- **PostCSS**: ^4.3.0
-- **Deployment**: Vercel
+- Visual language: deep OLED black (`#050505`), sharp white typography, and an ethereal glass dark premium layout.
+- Typography: `Geist`, `Geist_Mono`, and `Playfair_Display` initialized through the root layout.
+- Graphic elements: subtle background accents using transparent JoJo's Bizarre Adventure images with low resting opacity (`0.03`).
+- Component structures: interactive micro-beveled contact cards using `bezel-outer` and `bezel-inner` classes for nested borders, responsive flex layout, and dynamic text truncation.
 
 ---
 
-## Project Structure
+## 2. Technical Stack and File Inventory
 
-```
-contacts-app/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx          # Root layout
-│   │   ├── page.tsx            # Main page (renders ContactsApp)
-│   │   └── globals.css         # Global styles
-│   ├── components/
-│   │   ├── ContactsApp.tsx     # Main contacts component (client-side)
-│   │   └── ui/
-│   │       └── card.tsx        # Card UI component
-│   └── lib/
-│       └── utils.ts            # Utility functions (cn() for class merging)
-├── public/
-│   ├── fonts/                  # Custom fonts (sansdiego font)
-│   └── jjba pics/              # JJBA character images (SVG)
-├── sansdiego/                  # Font files directory
-├── package.json                # Dependencies
-├── tsconfig.json               # TypeScript configuration
-├── next.config.ts              # Next.js configuration
-├── postcss.config.mjs           # PostCSS configuration
-├── eslint.config.mjs            # ESLint configuration
-└── components.json             # Shadcn/ui config (if applicable)
-```
+### `src/lib/utils.ts`
+
+Provides a unified utility wrapper (`cn`) combining `clsx` and `tailwind-merge` to safely construct conditional Tailwind class structures without specificity conflicts.
+
+### `src/app/globals.css`
+
+Declares the CSS design system using the modern Tailwind `@import "tailwindcss";` format. It provisions keyframe rules (`fadeUp`, `fadeIn`, `slideInRight`), customized minimal scrollbars, and dual-bezel shadow systems.
+
+### `src/app/layout.tsx`
+
+Handles core metadata initialization and high-fidelity typography using Google Fonts via `Geist`, `Geist_Mono`, and `Playfair_Display`.
+
+### `src/components/ui/card.tsx`
+
+A flexible abstract component that uses component patterns such as `data-slot` and `data-size` to render clean layout boxes containing headers, titles, actions, descriptions, and dynamic footprints.
+
+### `src/app/page.tsx`
+
+Serves as the root server-rendered entry point, wrapping and exposing the client-facing presentation layer.
+
+### `src/components/ContactsApp.tsx`
+
+Serves as the client presentation layer. It owns the contact data, JJBA background accents, headline decode animation, Anime.js entrance choreography, and per-card magnetic hover effects.
 
 ---
 
-## Key Features
+## 3. Anime.js v4 Migration Challenge
 
-### ContactsApp Component
-**Location:** `src/components/ContactsApp.tsx` (Client Component)
+During implementation, multiple critical Next.js build errors were encountered due to API differences between Anime.js v3 and Anime.js v4.
 
-**Features:**
-- Displays contact links: Email, GitHub, Instagram, LinkedIn, Stack Overflow
-- **Animated Contact Cards**: 
-  - Hover effects with scale and border transitions
-  - Gradient overlays with violet/purple theme
-  - Icon support with smooth transitions
-- **Rotating JJBA Characters**: 
-  - 3 character images rotate every 5 seconds
-  - Images are SVG format (transparent backgrounds)
-  - Randomized positioning on page resets
-  - Smooth transitions between characters
+### Issue 1: Missing Default Export
 
-**Character Images:**
-- `/jjba pics/jotaro-kujostardust-crusadersjojos-bizarre-adventuretransparentmy-jojos-bizarre-adventure-11562915815zv7cmo7oie.svg`
-- `/jjba pics/400px-Giorno_Giovanna_Infobox_Manga.svg`
-- `/jjba pics/1200px-Josuke_DU_Infobox_Manga.svg`
+- Symptom: `Type error: Property 'default' does not exist on type 'typeof import("animejs")'.`
+- Cause: In v3, the library was commonly consumed through a default export. In Anime.js v4, default exports are deprecated in favor of explicit named exports such as `animate`, `stagger`, and `spring`.
+- Solution: Use dynamic named imports from `animejs` inside browser-only effects.
 
-**Contact Data:**
-```javascript
-{
-  email: "contactskshmtrip@gmail.com",
-  github: "skshmtrip",
-  instagram: "stemsaksham",
-  linkedin: "krishna-tripathi-009008274",
-  stackoverflow: "28962747"
-}
+### Issue 2: Broken Text Scramble Plugin Typing
+
+- Symptom: `Type error: Type 'FunctionValue' is not assignable to type 'TweenModifier'.`
+- Cause: Older v3-compatible text scrambling implementations used global-style modifiers. In v4, the `scrambleText` helper does not type cleanly as the `modifier` value expected by this animation call.
+- Solution: Remove Anime.js text scrambling from the headline path and use a browser-native `requestAnimationFrame` decode routine for text content updates.
+
+---
+
+## 4. Final Production Implementation
+
+The finalized, type-safe implementation of `ContactsApp.tsx` eliminates compilation bottlenecks by using direct native named-import destructuring, a browser-based text decode routine, and strict Anime.js v4 spring properties.
+
+### Anime.js v4 Usage
+
+```ts
+const { animate, stagger, spring } = await import("animejs");
 ```
 
-### Color Theme
-- **Primary**: Violet (violet-500 to violet-900)
-- **Secondary**: Purple (purple-900 to purple-600)
-- **Accents**: Violet-400, Violet-300
-- **Text**: White primary, Violet-300/400 secondary
+Anime.js remains responsible for:
+
+- Headline opacity reveal.
+- Subtitle fade-up motion.
+- Staggered spring entrance for contact cards.
+- Footer fade-in motion.
+- Per-card magnetic tilt and glow interactions.
+
+### Native Decode Routine
+
+The headline decode effect is implemented locally with `requestAnimationFrame`, updates only in the browser, and exposes a cancellation function for React effect cleanup.
+
+This avoids the v4 `TweenModifier` type mismatch while preserving the intended premium text-reveal interaction.
 
 ---
 
-## Development Scripts
+## 5. Verification Notes
+
+Use these scripts for local validation:
 
 ```bash
-npm run dev      # Start development server (Next.js dev mode)
-npm run build    # Build for production
-npm start        # Start production server
-npm run lint     # Run ESLint
+npm run build
+npm run lint
 ```
 
----
-
-## Important Notes
-
-### Known Characteristics
-1. **Memory Usage**: ~350MB+ RAM consumption (unoptimized)
-2. **Dynamic Positioning**: JJBA character images change position on each page reset
-3. **Responsive Design**: Uses Tailwind CSS for responsive behavior
-4. **Client-Side Rendering**: Main ContactsApp uses `"use client"` directive
-
-### Font Licensing
-- **sansdiego font**: Free-licensed, no copyright issues
-- Located in `public/fonts/` and `sansdiego/` directories
-
-### Deployment
-- **Hosting**: Vercel (verified working deployment)
-- **Build Tool**: Turbopack (Next.js 16 default)
-
----
-
-## Dependencies Details
-
-### Runtime Dependencies
-- `next` - Next.js framework
-- `react`, `react-dom` - React library
-- `@radix-ui/react-slot` - Headless component primitive
-- `@tailwindcss/postcss` - Tailwind CSS with PostCSS
-- `clsx` - Utility for conditional classes
-- `tailwind-merge` - Merge Tailwind classes
-
-### Dev Dependencies
-- `typescript` - Type checking
-- `@types/react`, `@types/react-dom`, `@types/node` - Type definitions
-- `eslint`, `eslint-config-next` - Linting
-
----
-
-## Configuration Files
-
-### TypeScript (`tsconfig.json`)
-- Path aliases configured (e.g., `@/` for `src/`)
-- Strict mode enabled
-- Next.js support
-
-### Next.js (`next.config.ts`)
-- Standard Next.js 16 configuration
-- Turbopack enabled by default
-
-### Tailwind CSS (@tailwindcss/postcss)
-- Version 4.3.0 with PostCSS integration
-- Custom theme with violet color scheme
-
----
-
-## Build Status
-✅ Builds successfully with Turbopack  
-✅ TypeScript checks passing  
-✅ Static site generation working  
-✅ ESLint configured and passing  
-
----
-
-## Contact Information
-**Owner**: Saksham (Krishna Tripathi)  
-**Email**: contactskshmtrip@gmail.com  
-**GitHub**: https://github.com/skshmtrip  
-
----
-
-## Next Steps for New Agents
-
-1. **For Styling Changes**: Modify Tailwind classes in `ContactsApp.tsx` or update global styles in `src/app/globals.css`
-2. **For Content Updates**: Update contact data object in `ContactsApp.tsx`
-3. **For New Features**: Ensure client components use `"use client"` directive
-4. **For Deployment**: Use Vercel's automatic deployment from git (currently integrated)
-5. **For Performance**: Consider optimizing image sizes and lazy loading if adding new assets
-
----
-
-*Context generated on June 1, 2026 | Last Updated: Current Session*
+The production build should compile successfully with Anime.js v4 once the headline animation no longer uses `scrambleText` as an Anime.js `modifier`.

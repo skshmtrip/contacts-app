@@ -9,6 +9,40 @@ interface ContactLink {
   icon: string;
 }
 
+const decodeText = (
+  element: HTMLElement,
+  finalText: string,
+  duration = 900,
+) => {
+  const glyphs = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&*+-?@";
+  const startedAt = performance.now();
+  let frameId = 0;
+
+  const tick = (now: number) => {
+    const progress = Math.min((now - startedAt) / duration, 1);
+    const revealed = Math.floor(progress * finalText.length);
+
+    element.textContent = finalText
+      .split("")
+      .map((char, index) => {
+        if (char === " " || index < revealed) return char;
+        return glyphs[Math.floor(Math.random() * glyphs.length)];
+      })
+      .join("");
+
+    if (progress < 1) {
+      frameId = requestAnimationFrame(tick);
+      return;
+    }
+
+    element.textContent = finalText;
+  };
+
+  frameId = requestAnimationFrame(tick);
+
+  return () => cancelAnimationFrame(frameId);
+};
+
 export default function ContactsApp() {
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
@@ -48,28 +82,29 @@ export default function ContactsApp() {
     "/jjba pics/1200px-Josuke_DU_Infobox_Manga.svg",
   ];
 
-  // ── Page-load animations ─────────────────────────────────────────────────
+  // Page-load animations
   useEffect(() => {
     let cancelled = false;
+    let cancelDecode: (() => void) | undefined;
 
     const run = async () => {
-      // Named imports — animejs v4 has no default export
-      const { animate, stagger, spring, scrambleText } = await import("animejs");
+      // Named imports: animejs v4 has no default export.
+      const { animate, stagger, spring } = await import("animejs");
 
       if (cancelled) return;
 
-      // 1. Scramble-text reveal on headline (built-in v4 modifier)
+      // 1. Browser-native decode reveal on headline.
       if (headlineRef.current) {
-        animate(headlineRef.current, {
+        const headline = headlineRef.current;
+        const finalText = "Let's connect.";
+
+        headline.textContent = "";
+        animate(headline, {
           opacity: [0, 1],
           duration: 100,
           ease: "linear",
         });
-        animate(headlineRef.current, {
-          modifier: scrambleText("Let's connect."),
-          duration: 900,
-          ease: "linear",
-        });
+        cancelDecode = decodeText(headline, finalText);
       }
 
       // 2. Subtitle fade-up
@@ -109,10 +144,11 @@ export default function ContactsApp() {
     run();
     return () => {
       cancelled = true;
+      cancelDecode?.();
     };
   }, []);
 
-  // ── Per-card magnetic tilt + glow ────────────────────────────────────────
+  // Per-card magnetic tilt and glow
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
 
