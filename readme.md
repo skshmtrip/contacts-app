@@ -11,5 +11,4 @@ Hey ya'll! I made this page using Claude's Haiku 4.5 Agent and a lot of typescri
 + Reach out when you can!!!
 
 Check out the actual contacts page (https://contacts-app-eosin.vercel.app)
-###Check out the actual contacts page (https://contacts-app-eosin.vercel.app)
  
