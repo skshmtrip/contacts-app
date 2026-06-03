@@ -181,7 +181,7 @@ export default function ContactsApp() {
             rotateX: dy * -12,
             rotateY: dx * 12,
             scale: 0.85,
-            duration: 400,
+            duration: 50,
             ease: "easeOutCubic",
           });
         }
@@ -190,7 +190,7 @@ export default function ContactsApp() {
           animate(bgWrapperRef.current, {
             translateX: dx * -30,
             translateY: dy * -30,
-            duration: 400,
+            duration: 50,
             ease: "easeOutCubic",
           });
         }
