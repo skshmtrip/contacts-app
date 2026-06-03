@@ -95,7 +95,7 @@ export default function ContactsApp() {
   useEffect(() => {
     parallaxSettings.current = { enabled: isParallaxEnabled, speedPercent: parallaxSpeedPercent };
     
-    // Reset global rotation if toggled off
+    // Reset global rotation and lock scale back to 1 if toggled off
     if (!isParallaxEnabled) {
       getAnime().then(({ animate }) => {
         if (mainWrapperRef.current) animate(mainWrapperRef.current, { rotateX: 0, rotateY: 0, scale: 1, duration: 600, ease: "easeOutCubic" });
@@ -239,7 +239,7 @@ export default function ContactsApp() {
           rotateX: dy * -8,
           rotateY: dx * 8,
           scale: 0.85,
-          duration: dynamicDuration * 1.5, // Mouse movement naturally takes longer
+          duration: dynamicDuration * 1.5,
           ease: "easeOutExpo",
         });
       }
@@ -344,8 +344,6 @@ export default function ContactsApp() {
       stopGlow();
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
       isCurrentlyTouching = false;
-      
-      // Notice: --card-x and --card-y are NO LONGER reset here, locking the light to its last location
 
       if (arrow) animate(arrow, { translateX: 0, opacity: 0.7, duration: 260, ease: "easeOutQuad" });
       animate(el, {
@@ -357,7 +355,7 @@ export default function ContactsApp() {
     const releaseDiffuse = () => {
       el.classList.remove("is-touching");
       el.classList.add("is-diffusing");
-      setTimeout(() => el.classList.remove("is-diffusing"), 600); // Matches CSS transition length
+      setTimeout(() => el.classList.remove("is-diffusing"), 600);
       resetCard();
     };
 
@@ -510,7 +508,9 @@ export default function ContactsApp() {
         
         {/* Vertical Slider Container */}
         <div 
-          className={`bg-[#0a0a0a]/80 backdrop-blur-md p-3 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[180px] w-[52px] ...`}
+          className={`bg-[#0a0a0a]/80 backdrop-blur-md p-3 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[180px] w-[52px] ${
+            isParallaxEnabled ? "opacity-40" : "opacity-100"
+          }`}
         >
           <input 
             type="range" 
