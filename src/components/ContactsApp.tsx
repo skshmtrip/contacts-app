@@ -127,42 +127,36 @@ export default function ContactsApp() {
     };
   }, []);
 
-  const startDeviceTilt = async (el: HTMLDivElement) => {
-    if (reducedMotionRef.current || typeof window === "undefined") return false;
+  // iOS Safari requires explicit permission over HTTPS triggered via a clean click/tap gesture
+  const requestSafariPermission = async (): Promise<boolean> => {
+    if (typeof window === "undefined") return false;
 
     const OrientationEvent = window.DeviceOrientationEvent as
       | DeviceOrientationEventWithPermission
       | undefined;
 
-    if (!OrientationEvent) {
-      orientationStatusRef.current = "unsupported";
-      return false;
-    }
-
-    if (
-      orientationStatusRef.current === "denied" ||
-      orientationStatusRef.current === "unsupported"
-    ) {
-      return false;
-    }
-
-    if (
-      orientationStatusRef.current === "unknown" &&
-      typeof OrientationEvent.requestPermission === "function"
-    ) {
+    // Check if it's iOS Safari requesting permission
+    if (OrientationEvent && typeof OrientationEvent.requestPermission === "function") {
       try {
-        orientationStatusRef.current =
-          (await OrientationEvent.requestPermission()) === "granted"
-            ? "granted"
-            : "denied";
-      } catch {
+        const permissionState = await OrientationEvent.requestPermission();
+        orientationStatusRef.current = permissionState === "granted" ? "granted" : "denied";
+        return permissionState === "granted";
+      } catch (error) {
+        console.error("DeviceOrientation permission request denied or failed:", error);
         orientationStatusRef.current = "denied";
+        return false;
       }
-    } else if (orientationStatusRef.current === "unknown") {
-      orientationStatusRef.current = "granted";
+    } else {
+      // Android or desktop browsers that support orientation natively without dynamic popups
+      orientationStatusRef.current = OrientationEvent ? "granted" : "unsupported";
+      return !!OrientationEvent;
     }
+  };
 
-    if (orientationStatusRef.current !== "granted") return false;
+  const startDeviceTilt = async (el: HTMLDivElement) => {
+    if (reducedMotionRef.current || orientationStatusRef.current === "denied" || orientationStatusRef.current === "unsupported") {
+      return false;
+    }
 
     activeTiltCardRef.current = el;
     el.classList.add("is-tilting");
@@ -180,6 +174,7 @@ export default function ContactsApp() {
           const orientation = latestOrientationRef.current;
           if (!card || !orientation) return;
 
+          // Normalize angles for a comfortable handheld tilt posture
           const gamma = clamp(orientation.gamma ?? 0, -24, 24);
           const beta = clamp((orientation.beta ?? 0) - 45, -24, 24);
           const pointerX = clamp(50 + gamma * 1.35, 18, 82);
@@ -282,7 +277,6 @@ export default function ContactsApp() {
     };
   }, []);
 
-  // Per-card magnetic tilt and glow
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
 
@@ -473,11 +467,9 @@ export default function ContactsApp() {
     };
 
     const onPointerMove = async (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
       const { dx, dy } = setPointerLight(e.clientX, e.clientY);
-
-      if (e.pointerType === "mouse" || orientationStatusRef.current !== "granted") {
-        animatePointerTilt(dx, dy);
-      }
+      animatePointerTilt(dx, dy);
     };
 
     const onPointerEnter = (e: PointerEvent) => {
@@ -503,9 +495,11 @@ export default function ContactsApp() {
         activeTiltCardRef.current = el;
         el.setPointerCapture?.(e.pointerId);
 
-        const tiltStarted = await startDeviceTilt(el);
-        if (!tiltStarted) {
+        // Safe mobile fallback if gyroscope has not been authorized yet
+        if (orientationStatusRef.current !== "granted") {
           animatePointerTilt(dx * 0.65, dy * 0.65, 260);
+        } else {
+          startDeviceTilt(el);
         }
 
         pressCard();
@@ -532,12 +526,30 @@ export default function ContactsApp() {
       resetCard();
     };
 
+    // Explicit standard click handler to securely prompt Safari permission popup
+    const onClick = async (e: MouseEvent) => {
+      // If it's a mobile touch interaction and permission is undetermined, prompt now
+      if (orientationStatusRef.current === "unknown") {
+        e.preventDefault(); // Pause navigation to fire popup
+        const granted = await requestSafariPermission();
+        if (granted) {
+          await startDeviceTilt(el);
+        }
+        // Proceed with navigation after resolution
+        const anchor = el.closest("a");
+        if (anchor && anchor.href) {
+          window.open(anchor.href, anchor.target || "_self", anchor.rel || "");
+        }
+      }
+    };
+
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerenter", onPointerEnter);
     el.addEventListener("pointerleave", onPointerLeave);
     el.addEventListener("pointerdown", onPointerDown);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointercancel", onPointerCancel);
+    el.addEventListener("click", onClick);
 
     return () => {
       if (tiltReleaseTimer) {
@@ -550,6 +562,7 @@ export default function ContactsApp() {
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerCancel);
+      el.removeEventListener("click", onClick);
     };
   };
 
