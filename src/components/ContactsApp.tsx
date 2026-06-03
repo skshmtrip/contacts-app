@@ -91,31 +91,33 @@ export default function ContactsApp() {
     "/jjba pics/1200px-Josuke_DU_Infobox_Manga.svg",
   ];
 
+  // Helper function to return elements back to center alignment gracefully
+  const resetParallaxPosition = async () => {
+    const { animate } = await getAnime();
+    if (mainWrapperRef.current) {
+      animate(mainWrapperRef.current, { 
+        rotateX: 0, 
+        rotateY: 0, 
+        scale: 0.85,
+        duration: 600, 
+        ease: "easeOutCubic" 
+      });
+    }
+    if (bgWrapperRef.current) {
+      animate(bgWrapperRef.current, { 
+        translateX: 0, 
+        translateY: 0, 
+        duration: 600, 
+        ease: "easeOutCubic" 
+      });
+    }
+  };
+
   // Keep refs in sync with state for event loops
   useEffect(() => {
     parallaxSettings.current = { enabled: isParallaxEnabled, speedPercent: parallaxSpeedPercent };
-    
-    // Settle rotation back to origin when toggled off without scaling shifts
     if (!isParallaxEnabled) {
-      getAnime().then(({ animate }) => {
-        if (mainWrapperRef.current) {
-          animate(mainWrapperRef.current, { 
-            rotateX: 0, 
-            rotateY: 0, 
-            scale: 0.85,
-            duration: 500, 
-            ease: "easeOutCubic" 
-          });
-        }
-        if (bgWrapperRef.current) {
-          animate(bgWrapperRef.current, { 
-            translateX: 0, 
-            translateY: 0, 
-            duration: 500, 
-            ease: "easeOutCubic" 
-          });
-        }
-      });
+      resetParallaxPosition();
     }
   }, [isParallaxEnabled, parallaxSpeedPercent]);
 
@@ -241,7 +243,14 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const onGlobalPointerMove = async (e: PointerEvent) => {
-      if (e.pointerType !== "mouse" || reducedMotionRef.current || orientationStatusRef.current === "granted" || !parallaxSettings.current.enabled) return;
+      // FIX: Check e.buttons === 0 to ignore active text dragging/selections on the PC background canvas.
+      if (
+        e.pointerType !== "mouse" || 
+        e.buttons !== 0 || 
+        reducedMotionRef.current || 
+        orientationStatusRef.current === "granted" || 
+        !parallaxSettings.current.enabled
+      ) return;
 
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
@@ -451,8 +460,12 @@ export default function ContactsApp() {
 
   return (
     <div
-      className="min-h-[100dvh] bg-[#050505] relative overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row items-center justify-start md:justify-center p-6 md:p-0"
+      className="min-h-[100dvh] bg-[#050505] relative overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row items-center justify-start md:justify-center p-6 md:p-0 select-none touch-action-none"
       style={{ perspective: "1600px" }}
+      onPointerLeave={() => {
+        // FIX: Triggers immediate matrix recovery when the mouse exits the desktop browser viewport bounds completely.
+        if (parallaxSettings.current.enabled) resetParallaxPosition();
+      }}
     >
       <div 
         ref={bgWrapperRef}
@@ -470,7 +483,7 @@ export default function ContactsApp() {
 
       <div 
         ref={mainWrapperRef} 
-        className="w-full max-w-2xl mt-12 mb-6 md:my-0 md:px-8 relative z-10 flex-shrink-0"
+        className="w-full max-w-2xl mt-12 mb-6 md:my-0 md:px-8 relative z-10 flex-shrink-0 touch-action-none"
         style={{ transformStyle: "preserve-3d", willChange: "transform", transform: "scale(0.85)" }}
       >
         <div className="mb-14 md:mb-20" style={{ transform: "translateZ(40px)" }}>
