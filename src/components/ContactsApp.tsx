@@ -189,7 +189,7 @@ export default function ContactsApp() {
             rotateX: dy * -12, // Max 12 degrees
             rotateY: dx * 12,
             scale: 0.85, // Keeps everything safely inside the viewport
-            duration: 400,
+            duration: 100,
             ease: "easeOutCubic",
           });
         }
@@ -199,7 +199,7 @@ export default function ContactsApp() {
           animate(bgWrapperRef.current, {
             translateX: dx * -30,
             translateY: dy * -30,
-            duration: 400,
+            duration: 100,
             ease: "easeOutCubic",
           });
         }
