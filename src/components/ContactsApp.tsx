@@ -451,7 +451,7 @@ export default function ContactsApp() {
 
   return (
     <div
-      className="min-h-[100dvh] bg-[#050505] relative overflow-hidden flex items-center justify-center"
+      className="min-h-[100dvh] bg-[#050505] relative overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row items-center justify-start md:justify-center p-6 md:p-0"
       style={{ perspective: "1600px" }}
     >
       <div 
@@ -470,15 +470,15 @@ export default function ContactsApp() {
 
       <div 
         ref={mainWrapperRef} 
-        className="w-full max-w-2xl px-6 md:px-8 relative z-10"
+        className="w-full max-w-2xl mt-12 mb-6 md:my-0 md:px-8 relative z-10 flex-shrink-0"
         style={{ transformStyle: "preserve-3d", willChange: "transform", transform: "scale(0.85)" }}
       >
-        <div className="mb-20" style={{ transform: "translateZ(40px)" }}>
+        <div className="mb-14 md:mb-20" style={{ transform: "translateZ(40px)" }}>
           <div className="space-y-6">
-            <h1 ref={headlineRef} className="text-6xl md:text-7xl font-serif font-light tracking-tight leading-tight text-white" style={{ opacity: 0 }}>
+            <h1 ref={headlineRef} className="text-5xl md:text-7xl font-serif font-light tracking-tight leading-tight text-white" style={{ opacity: 0 }}>
               Let&apos;s connect.
             </h1>
-            <p ref={subtitleRef} className="text-lg text-[#e0e0e0] leading-relaxed max-w-xl" style={{ opacity: 0 }}>
+            <p ref={subtitleRef} className="text-base md:text-lg text-[#e0e0e0] leading-relaxed max-w-xl" style={{ opacity: 0 }}>
               Reach out across your preferred platform. I&apos;m always interested in interesting projects, creative collaborations, and great conversations.
             </p>
           </div>
@@ -491,14 +491,14 @@ export default function ContactsApp() {
               className="contact-card block group transition-all duration-300" style={{ opacity: 0 }}
             >
               <div className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]" ref={setupCardEffects}>
-                <div className="bezel-inner p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
+                <div className="bezel-inner p-5 md:p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="icon-shell flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] group-hover:border-[#3a3a3a] transition-colors duration-300 text-white">
                       <IconComponent type={link.icon} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs uppercase tracking-wider text-[#a0a0a0] font-medium mb-1">{link.title}</p>
-                      <p className="text-base text-white font-medium truncate">{link.value}</p>
+                      <p className="text-sm md:text-base text-white font-medium truncate">{link.value}</p>
                     </div>
                   </div>
                   <div className="card-arrow flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
@@ -512,17 +512,59 @@ export default function ContactsApp() {
           ))}
         </div>
 
-        <div className="mt-20" style={{ transform: "translateZ(5px)" }}>
+        {/* Dynamic Controls Container: Renders inline underneath card stack on mobile; vanishes on desktop */}
+        <div className="mt-8 flex flex-col items-center gap-4 w-full md:hidden">
+          
+          {/* Horizontal Slider Module */}
+          <div 
+            className={`w-full bg-[#0a0a0a]/80 backdrop-blur-md px-6 py-4 rounded-xl border border-[#2a2a2a] shadow-xl flex items-center gap-4 h-[54px] transition-all duration-300 ${
+              isParallaxEnabled ? "opacity-40" : "opacity-100"
+            }`}
+          >
+            <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase select-none">SPD</span>
+            <input 
+              type="range" 
+              min="1" 
+              max="100" 
+              value={parallaxSpeedPercent} 
+              onChange={(e) => setParallaxSpeedPercent(Number(e.target.value))}
+              disabled={isParallaxEnabled}
+              className="flex-1 h-1 bg-[#2a2a2a] rounded-lg appearance-none cursor-pointer outline-none"
+              style={{
+                accentColor: "#ffffff",
+                pointerEvents: isParallaxEnabled ? "none" : "auto"
+              }}
+            />
+          </div>
+
+          {/* Toggle Module placed directly below horizontal dragger */}
+          <button 
+            onClick={() => setIsParallaxEnabled(!isParallaxEnabled)}
+            className={`w-full flex items-center justify-center h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
+              isParallaxEnabled 
+                ? "bg-white text-black border-white" 
+                : "bg-[#0a0a0a]/80 text-[#a0a0a0] border-[#2a2a2a]"
+            }`}
+            aria-label="Toggle Parallax"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span className="text-xs uppercase tracking-wider font-mono font-medium">Toggle Parallax Engine</span>
+          </button>
+        </div>
+
+        <div className="mt-14 md:mt-20" style={{ transform: "translateZ(5px)" }}>
           <p ref={footerRef} className="text-sm text-[#a0a0a0] text-center" style={{ opacity: 0 }}>
             Built with intent. No spam, no vanity metrics.
           </p>
         </div>
       </div>
 
-      {/* Floating Settings Panel */}
-      <div className="fixed bottom-6 right-6 z-50 flex items-end gap-3 pointer-events-none">
+      {/* Floating Viewport Controls: Hidden on Mobile, Fixed at desktop bottom-right layout bounds */}
+      <div className="hidden md:fixed md:bottom-6 md:right-6 md:z-50 md:flex md:items-end md:gap-3 md:pointer-events-none">
         
-        {/* Symmetrical Vertical Slider Container */}
+        {/* Symmetrical Vertical Slider Box */}
         <div 
           className={`bg-[#0a0a0a]/80 backdrop-blur-md px-3 pt-6 pb-4 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[200px] w-[52px] ${
             isParallaxEnabled ? "opacity-40" : "opacity-100"
@@ -546,7 +588,7 @@ export default function ContactsApp() {
           <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-4 select-none">SPD</span>
         </div>
 
-        {/* Parallax Toggle */}
+        {/* Floating Parallax Toggle */}
         <button 
           onClick={() => setIsParallaxEnabled(!isParallaxEnabled)}
           className={`pointer-events-auto flex items-center justify-center w-12 h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
