@@ -508,11 +508,9 @@ export default function ContactsApp() {
       {/* Floating Settings Panel */}
       <div className="fixed bottom-6 right-6 z-50 flex items-end gap-3 pointer-events-none">
         
-        {/* Vertical Slider (Locked if Parallax is ON) */}
+        {/* Vertical Slider Container */}
         <div 
-          className={`bg-[#0a0a0a]/80 backdrop-blur-md p-3 pb-4 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center justify-end h-[160px] w-[48px] ${
-            isParallaxEnabled ? "opacity-30 grayscale cursor-not-allowed" : "opacity-100 hover:border-[#4a4a4a]"
-          }`}
+          className={`bg-[#0a0a0a]/80 backdrop-blur-md p-3 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[180px] w-[52px] ...`}
         >
           <input 
             type="range" 
@@ -521,13 +519,13 @@ export default function ContactsApp() {
             value={parallaxSpeedPercent} 
             onChange={(e) => setParallaxSpeedPercent(Number(e.target.value))}
             disabled={isParallaxEnabled}
-            className="w-[120px] h-1 -rotate-90 origin-center bg-[#2a2a2a] rounded-lg appearance-none cursor-pointer outline-none mb-12"
+            className="w-[140px] h-1 -rotate-90 origin-center bg-[#2a2a2a] rounded-lg appearance-none cursor-pointer outline-none mt-12"
             style={{
               accentColor: "#ffffff",
               pointerEvents: isParallaxEnabled ? "none" : "auto"
             }}
           />
-          <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-auto">Spd</span>
+          <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-auto">SPD</span>
         </div>
 
         {/* Parallax Toggle */}
