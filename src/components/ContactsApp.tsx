@@ -183,11 +183,12 @@ export default function ContactsApp() {
 
         const { animate } = await getAnime();
 
-        // Tilt the entire layout wrapper
+        // Tilt the entire layout wrapper and maintain the 0.85 scale buffer
         if (mainWrapperRef.current) {
           animate(mainWrapperRef.current, {
             rotateX: dy * -12, // Max 12 degrees
             rotateY: dx * 12,
+            scale: 0.85, // Keeps everything safely inside the viewport
             duration: 400,
             ease: "easeOutCubic",
           });
@@ -223,6 +224,7 @@ export default function ContactsApp() {
         animate(mainWrapperRef.current, {
           rotateX: dy * -8,
           rotateY: dx * 8,
+          scale: 0.85, // Keeps everything safely inside the viewport
           duration: 600,
           ease: "easeOutExpo",
         });
@@ -461,7 +463,7 @@ export default function ContactsApp() {
   return (
     <div
       className="min-h-[100dvh] bg-[#050505] relative overflow-hidden flex items-center justify-center"
-      style={{ perspective: "1200px" }}
+      style={{ perspective: "1600px" }}
     >
       {/* Background layer mapped to separate ref to tilt opposite direction */}
       <div 
@@ -486,11 +488,11 @@ export default function ContactsApp() {
         ))}
       </div>
 
-      {/* Primary Parallax Wrapping Plane */}
+      {/* Primary Parallax Wrapping Plane - Initialized with scale(0.85) buffer */}
       <div 
         ref={mainWrapperRef} 
         className="w-full max-w-2xl px-6 md:px-8 relative z-10"
-        style={{ transformStyle: "preserve-3d", willChange: "transform" }}
+        style={{ transformStyle: "preserve-3d", willChange: "transform", transform: "scale(0.85)" }}
       >
         
         {/* Layer 1: Headline - Floats highest */}
