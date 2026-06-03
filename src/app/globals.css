@@ -253,6 +253,24 @@ a {
     opacity: 0.7;
     will-change: transform, opacity;
   }
+
+  /* Mobile touch & tilt states */
+  .contact-card.is-touching .bezel-outer {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.45),
+      0 0 28px rgba(255, 255, 255, 0.12);
+  }
+
+  .contact-card.is-tilting .bezel-outer::before,
+  .contact-card.is-touching .bezel-outer::before {
+    opacity: 1;
+  }
+
+  .contact-card.is-touching .icon-shell::before {
+    opacity: 1;
+    transform: scale(1);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.35), transparent 65%);
+  }
 }
 
 /* ============================================================================

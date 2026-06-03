@@ -50,11 +50,27 @@ const getAnime = () => {
   return animeModulePromise;
 };
 
+type OrientationStatus = "unknown" | "granted" | "denied" | "unsupported";
+
+type DeviceOrientationEventWithPermission = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<PermissionState>;
+};
+
+const clamp = (value: number, min: number, max: number) => {
+  return Math.min(Math.max(value, min), max);
+};
+
 export default function ContactsApp() {
   const headlineRef = useRef<HTMLHeadingElement>(null);
   const subtitleRef = useRef<HTMLParagraphElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLParagraphElement>(null);
+  const activeTiltCardRef = useRef<HTMLDivElement | null>(null);
+  const orientationStatusRef = useRef<OrientationStatus>("unknown");
+  const orientationHandlerRef = useRef<((event: DeviceOrientationEvent) => void) | null>(null);
+  const orientationFrameRef = useRef<number | null>(null);
+  const latestOrientationRef = useRef<DeviceOrientationEvent | null>(null);
+  const reducedMotionRef = useRef(false);
 
   const contactLinks: ContactLink[] = [
     {
@@ -89,18 +105,132 @@ export default function ContactsApp() {
     "/jjba pics/1200px-Josuke_DU_Infobox_Manga.svg",
   ];
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncReducedMotion = () => {
+      reducedMotionRef.current = mediaQuery.matches;
+    };
+
+    syncReducedMotion();
+    mediaQuery.addEventListener("change", syncReducedMotion);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncReducedMotion);
+
+      if (orientationHandlerRef.current) {
+        window.removeEventListener("deviceorientation", orientationHandlerRef.current);
+      }
+
+      if (orientationFrameRef.current) {
+        cancelAnimationFrame(orientationFrameRef.current);
+      }
+    };
+  }, []);
+
+  const startDeviceTilt = async (el: HTMLDivElement) => {
+    if (reducedMotionRef.current || typeof window === "undefined") return false;
+
+    const OrientationEvent = window.DeviceOrientationEvent as
+      | DeviceOrientationEventWithPermission
+      | undefined;
+
+    if (!OrientationEvent) {
+      orientationStatusRef.current = "unsupported";
+      return false;
+    }
+
+    if (
+      orientationStatusRef.current === "denied" ||
+      orientationStatusRef.current === "unsupported"
+    ) {
+      return false;
+    }
+
+    if (
+      orientationStatusRef.current === "unknown" &&
+      typeof OrientationEvent.requestPermission === "function"
+    ) {
+      try {
+        orientationStatusRef.current =
+          (await OrientationEvent.requestPermission()) === "granted"
+            ? "granted"
+            : "denied";
+      } catch {
+        orientationStatusRef.current = "denied";
+      }
+    } else if (orientationStatusRef.current === "unknown") {
+      orientationStatusRef.current = "granted";
+    }
+
+    if (orientationStatusRef.current !== "granted") return false;
+
+    activeTiltCardRef.current = el;
+    el.classList.add("is-tilting");
+
+    if (!orientationHandlerRef.current) {
+      orientationHandlerRef.current = (event: DeviceOrientationEvent) => {
+        latestOrientationRef.current = event;
+
+        if (orientationFrameRef.current !== null) return;
+
+        orientationFrameRef.current = requestAnimationFrame(async () => {
+          orientationFrameRef.current = null;
+
+          const card = activeTiltCardRef.current;
+          const orientation = latestOrientationRef.current;
+          if (!card || !orientation) return;
+
+          const gamma = clamp(orientation.gamma ?? 0, -24, 24);
+          const beta = clamp((orientation.beta ?? 0) - 45, -24, 24);
+          const pointerX = clamp(50 + gamma * 1.35, 18, 82);
+          const pointerY = clamp(50 + beta * 1.05, 18, 82);
+          const inner = card.querySelector<HTMLElement>(".bezel-inner");
+          const icon = card.querySelector<HTMLElement>(".icon-shell");
+
+          card.style.setProperty("--card-x", `${pointerX}%`);
+          card.style.setProperty("--card-y", `${pointerY}%`);
+
+          const { animate } = await getAnime();
+
+          if (inner) {
+            animate(inner, {
+              rotateX: beta * -0.14,
+              rotateY: gamma * 0.16,
+              translateX: gamma * 0.18,
+              translateY: beta * 0.12,
+              duration: 220,
+              ease: "easeOutQuad",
+            });
+          }
+
+          if (icon) {
+            animate(icon, {
+              translateX: gamma * 0.18,
+              translateY: beta * 0.14,
+              rotateZ: gamma * 0.08,
+              duration: 220,
+              ease: "easeOutQuad",
+            });
+          }
+        });
+      };
+
+      window.addEventListener("deviceorientation", orientationHandlerRef.current);
+    }
+
+    return true;
+  };
+
   // Page-load animations
   useEffect(() => {
     let cancelled = false;
     let cancelDecode: (() => void) | undefined;
 
     const run = async () => {
-      // Named imports: animejs v4 has no default export.
       const { animate, stagger, spring } = await getAnime();
 
       if (cancelled) return;
 
-      // 1. Browser-native decode reveal on headline.
       if (headlineRef.current) {
         const headline = headlineRef.current;
         const finalText = "Let's connect.";
@@ -114,7 +244,6 @@ export default function ContactsApp() {
         cancelDecode = decodeText(headline, finalText);
       }
 
-      // 2. Subtitle fade-up
       if (subtitleRef.current) {
         animate(subtitleRef.current, {
           opacity: [0, 1],
@@ -125,7 +254,6 @@ export default function ContactsApp() {
         });
       }
 
-      // 3. Cards staggered spring entrance
       if (cardsRef.current) {
         const cards = cardsRef.current.querySelectorAll<HTMLElement>(".contact-card");
         animate(cards, {
@@ -136,7 +264,6 @@ export default function ContactsApp() {
         });
       }
 
-      // 4. Footer fade-in
       if (footerRef.current) {
         animate(footerRef.current, {
           opacity: [0, 1],
@@ -160,21 +287,49 @@ export default function ContactsApp() {
     if (!el) return;
 
     let glowAnimation: { pause: () => void } | null = null;
+    let tiltReleaseTimer: number | null = null;
 
-    const onMove = async (e: MouseEvent) => {
+    const setPointerLight = (clientX: number, clientY: number) => {
+      const rect = el.getBoundingClientRect();
+      const pointerX = ((clientX - rect.left) / rect.width) * 100;
+      const pointerY = ((clientY - rect.top) / rect.height) * 100;
+
+      el.style.setProperty("--card-x", `${pointerX}%`);
+      el.style.setProperty("--card-y", `${pointerY}%`);
+
+      return {
+        dx: (clientX - (rect.left + rect.width / 2)) / rect.width,
+        dy: (clientY - (rect.top + rect.height / 2)) / rect.height,
+      };
+    };
+
+    const startGlow = async () => {
+      if (glowAnimation) return;
+
+      const { animate } = await getAnime();
+      glowAnimation = animate(el, {
+        boxShadow: [
+          "0 0 0px rgba(255,255,255,0.00)",
+          "0 0 42px rgba(255,255,255,0.12)",
+          "0 0 0px rgba(255,255,255,0.00)",
+        ],
+        ease: "easeInOutSine",
+        duration: 1400,
+        loop: true,
+      });
+    };
+
+    const stopGlow = () => {
+      if (!glowAnimation) return;
+      glowAnimation.pause();
+      glowAnimation = null;
+    };
+
+    const animatePointerTilt = async (dx: number, dy: number, duration = 360) => {
       const { animate } = await getAnime();
       const inner = el.querySelector<HTMLElement>(".bezel-inner");
       const icon = el.querySelector<HTMLElement>(".icon-shell");
       if (!inner) return;
-
-      const rect = el.getBoundingClientRect();
-      const pointerX = ((e.clientX - rect.left) / rect.width) * 100;
-      const pointerY = ((e.clientY - rect.top) / rect.height) * 100;
-      const dx = (e.clientX - (rect.left + rect.width / 2)) / rect.width;
-      const dy = (e.clientY - (rect.top + rect.height / 2)) / rect.height;
-
-      el.style.setProperty("--card-x", `${pointerX}%`);
-      el.style.setProperty("--card-y", `${pointerY}%`);
 
       animate(inner, {
         rotateX: dy * -8,
@@ -182,7 +337,7 @@ export default function ContactsApp() {
         translateX: dx * 6,
         translateY: dy * 6,
         ease: "easeOutElastic(1, 0.45)",
-        duration: 360,
+        duration: duration,
       });
 
       if (icon) {
@@ -191,12 +346,12 @@ export default function ContactsApp() {
           translateY: dy * 8,
           rotateZ: dx * 8,
           ease: "easeOutQuad",
-          duration: 240,
+          duration: Math.max(duration * 0.66, 240),
         });
       }
     };
 
-    const onEnter = async () => {
+    const liftCard = async () => {
       const { animate, spring } = await getAnime();
       const arrow = el.querySelector<HTMLElement>(".card-arrow");
 
@@ -216,21 +371,44 @@ export default function ContactsApp() {
         });
       }
 
-      glowAnimation = animate(el, {
-        boxShadow: [
-          "0 0 0px rgba(255,255,255,0.00)",
-          "0 0 42px rgba(255,255,255,0.12)",
-          "0 0 0px rgba(255,255,255,0.00)",
-        ],
-        ease: "easeInOutSine",
-        duration: 1400,
-        loop: true,
-      });
+      startGlow();
     };
 
-    const onLeave = async () => {
+    const pressCard = async () => {
       const { animate, spring } = await getAnime();
-      if (glowAnimation) glowAnimation.pause();
+      const icon = el.querySelector<HTMLElement>(".icon-shell");
+      const arrow = el.querySelector<HTMLElement>(".card-arrow");
+
+      animate(el, {
+        scale: 0.985,
+        translateY: 1,
+        ease: spring({ stiffness: 210, damping: 16 }),
+        duration: 300,
+      });
+
+      if (icon) {
+        animate(icon, {
+          scale: [1, 1.12, 1.04],
+          duration: 360,
+          ease: "easeOutExpo",
+        });
+      }
+
+      if (arrow) {
+        animate(arrow, {
+          translateX: [0, 10, 4],
+          opacity: [0.7, 1],
+          duration: 360,
+          ease: "easeOutExpo",
+        });
+      }
+
+      startGlow();
+    };
+
+    const resetCard = async () => {
+      const { animate, spring } = await getAnime();
+      stopGlow();
 
       const inner = el.querySelector<HTMLElement>(".bezel-inner");
       const icon = el.querySelector<HTMLElement>(".icon-shell");
@@ -278,14 +456,100 @@ export default function ContactsApp() {
       });
     };
 
-    el.addEventListener("mousemove", onMove);
-    el.addEventListener("mouseenter", onEnter);
-    el.addEventListener("mouseleave", onLeave);
+    const releaseTouchCard = () => {
+      el.classList.remove("is-touching");
+
+      if (tiltReleaseTimer) {
+        window.clearTimeout(tiltReleaseTimer);
+      }
+
+      tiltReleaseTimer = window.setTimeout(() => {
+        if (activeTiltCardRef.current === el) {
+          activeTiltCardRef.current = null;
+          el.classList.remove("is-tilting");
+          resetCard();
+        }
+      }, 1100);
+    };
+
+    const onPointerMove = async (e: PointerEvent) => {
+      const { dx, dy } = setPointerLight(e.clientX, e.clientY);
+
+      if (e.pointerType === "mouse" || orientationStatusRef.current !== "granted") {
+        animatePointerTilt(dx, dy);
+      }
+    };
+
+    const onPointerEnter = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      liftCard();
+    };
+
+    const onPointerLeave = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      resetCard();
+    };
+
+    const onPointerDown = async (e: PointerEvent) => {
+      const { dx, dy } = setPointerLight(e.clientX, e.clientY);
+
+      if (tiltReleaseTimer) {
+        window.clearTimeout(tiltReleaseTimer);
+        tiltReleaseTimer = null;
+      }
+
+      if (e.pointerType !== "mouse") {
+        el.classList.add("is-touching");
+        activeTiltCardRef.current = el;
+        el.setPointerCapture?.(e.pointerId);
+
+        const tiltStarted = await startDeviceTilt(el);
+        if (!tiltStarted) {
+          animatePointerTilt(dx * 0.65, dy * 0.65, 260);
+        }
+
+        pressCard();
+        return;
+      }
+
+      pressCard();
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") {
+        liftCard();
+        return;
+      }
+      releaseTouchCard();
+    };
+
+    const onPointerCancel = () => {
+      el.classList.remove("is-touching", "is-tilting");
+
+      if (activeTiltCardRef.current === el) {
+        activeTiltCardRef.current = null;
+      }
+      resetCard();
+    };
+
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerenter", onPointerEnter);
+    el.addEventListener("pointerleave", onPointerLeave);
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerCancel);
 
     return () => {
-      el.removeEventListener("mousemove", onMove);
-      el.removeEventListener("mouseenter", onEnter);
-      el.removeEventListener("mouseleave", onLeave);
+      if (tiltReleaseTimer) {
+        window.clearTimeout(tiltReleaseTimer);
+      }
+
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerenter", onPointerEnter);
+      el.removeEventListener("pointerleave", onPointerLeave);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerCancel);
     };
   };
 
@@ -388,7 +652,7 @@ export default function ContactsApp() {
               >
                 <div className="bezel-inner p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] group-hover:border-[#3a3a3a] transition-colors duration-300 text-white">
+                    <div className="icon-shell flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] group-hover:border-[#3a3a3a] transition-colors duration-300 text-white">
                       <IconComponent type={link.icon} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -400,7 +664,7 @@ export default function ContactsApp() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
+                  <div className="card-arrow flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
                     </svg>
