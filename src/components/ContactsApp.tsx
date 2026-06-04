@@ -112,8 +112,6 @@ export default function ContactsApp() {
         ease: "easeOutCubic" 
       });
     }
-    // Fire event to reset card glares
-    window.dispatchEvent(new CustomEvent('update-gyro-light', { detail: { dx: 0, dy: 0 } }));
   };
 
   // Keep refs in sync with state for event loops
@@ -220,18 +218,20 @@ export default function ContactsApp() {
         if (event.gamma === null || event.beta === null) return;
         
         isGyroActiveRef.current = true;
-
-        if (reducedMotionRef.current || !parallaxSettings.current.enabled) return;
+        if (reducedMotionRef.current) return;
 
         const gamma = clamp(event.gamma, -35, 35);
         const beta = clamp(event.beta - 45, -35, 35);
         const dx = gamma / 35;
         const dy = beta / 35;
-        const dynamicDuration = getDynamicDuration();
 
-        // Broadcast gyro orientation to any listening cards for the reflection overlay
+        // ALWAYS broadcast gyro orientation for the reflection overlay (runs even if 3D is OFF)
         window.dispatchEvent(new CustomEvent('update-gyro-light', { detail: { dx, dy } }));
 
+        // Block 3D structural transformations if Parallax is OFF
+        if (!parallaxSettings.current.enabled) return;
+
+        const dynamicDuration = getDynamicDuration();
         const { animate } = await getAnime();
 
         if (mainWrapperRef.current) {
@@ -327,23 +327,19 @@ export default function ContactsApp() {
     return () => { cancelled = true; cancelDecode?.(); };
   }, []);
 
-  // Card interaction & glare logic
+  // Card interaction & split-glare logic
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
     let glowAnimation: { pause: () => void } | null = null;
     let isCurrentlyTouching = false;
 
-    // Handles the inner glare gradient coordinates
+    // Sets coordinates for the localized Light Ball (Desktop Hover / Mobile Touch)
     const setPointerLight = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
       const pointerX = ((clientX - rect.left) / rect.width) * 100;
       const pointerY = ((clientY - rect.top) / rect.height) * 100;
       el.style.setProperty("--card-x", `${pointerX}%`);
       el.style.setProperty("--card-y", `${pointerY}%`);
-      
-      // Override Gyro coordinates if actively hovering/touching
-      el.style.setProperty("--glare-x", `${pointerX}%`);
-      el.style.setProperty("--glare-y", `${pointerY}%`);
     };
 
     const handleScrollUpdate = () => {
@@ -352,19 +348,18 @@ export default function ContactsApp() {
       }
     };
     
-    // Listen for the global gyro event to sweep the reflection across the card
+    // Updates coordinates for the sweeping ambient Gyro Sheen
     const handleGyroUpdate = (e: Event) => {
-      // Don't fight the mouse/touch position if the user is directly interacting with the card
-      if (isCurrentlyTouching || el.matches(':hover')) return;
-
       const customEvent = e as CustomEvent<{ dx: number; dy: number }>;
       const { dx, dy } = customEvent.detail;
       
-      // Invert the trajectory multiplier to simulate a natural light reflection
-      const gx = (-dx * 120) + 50; 
-      const gy = (-dy * 120) + 50;
-      el.style.setProperty("--glare-x", `${gx}%`);
-      el.style.setProperty("--glare-y", `${gy}%`);
+      // Sweep mid-point across the card from -50% to 150% based on horizontal tilt
+      const mid = 50 + (-dx * 120); 
+      // Shift the angle slightly based on vertical tilt
+      const angle = 105 + (-dy * 30); 
+      
+      el.style.setProperty("--gyro-mid", `${mid}%`);
+      el.style.setProperty("--gyro-angle", `${angle}deg`);
     };
 
     window.addEventListener('update-orb-scroll', handleScrollUpdate);
@@ -424,7 +419,13 @@ export default function ContactsApp() {
     };
 
     const onPointerMove = (e: PointerEvent) => setPointerLight(e.clientX, e.clientY);
-    const onPointerEnter = (e: PointerEvent) => { if (e.pointerType === "mouse") { el.classList.remove("is-diffusing"); liftCard(); } };
+    const onPointerEnter = (e: PointerEvent) => { 
+      if (e.pointerType === "mouse") { 
+        setPointerLight(e.clientX, e.clientY); // Snap ball instantly to mouse
+        el.classList.remove("is-diffusing"); 
+        liftCard(); 
+      } 
+    };
     const onPointerLeave = (e: PointerEvent) => { if (e.pointerType === "mouse") releaseDiffuse(); };
     
     const onPointerDown = (e: PointerEvent) => {
@@ -432,7 +433,7 @@ export default function ContactsApp() {
       setPointerLight(e.clientX, e.clientY);
       el.classList.remove("is-diffusing");
       if (e.pointerType !== "mouse") {
-        el.classList.add("is-touching");
+        el.classList.add("is-touching"); // Activates the mobile touch-spotlight
         isCurrentlyTouching = true;
       }
       pressCard();
@@ -510,7 +511,6 @@ export default function ContactsApp() {
         if (parallaxSettings.current.enabled) resetParallaxPosition();
       }}
     >
-      {/* Visual Identity Watermark Layer */}
       <div 
         className="absolute top-6 right-6 z-50 pointer-events-none opacity-25 origin-top-right select-none"
         style={{ transform: "scale(0.55)" }}
@@ -558,19 +558,24 @@ export default function ContactsApp() {
             >
               <div className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]" ref={setupCardEffects}>
                 
-                {/* Notice the relative & overflow-hidden added to bezel-inner to contain the glare */}
                 <div className="bezel-inner relative overflow-hidden p-5 md:p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
                   
-                  {/* NEW Interactive Glare / Light Reflection Layer */}
+                  {/* 1. Ambient Gyro Sheen: A broad, glossy wash across the card. No visible "ball" */}
                   <div 
-                    className="absolute inset-0 pointer-events-none z-0 transition-opacity duration-300 opacity-60 group-hover:opacity-100"
+                    className="absolute inset-0 pointer-events-none z-0 transition-opacity duration-300"
                     style={{
-                      // var(--glare-x/y) falls back to slightly off-center top if untouched 
-                      background: "radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, -20%), rgba(255,255,255,0.075) 0%, transparent 60%)"
+                      background: "linear-gradient(var(--gyro-angle, 105deg), transparent calc(var(--gyro-mid, 50%) - 40%), rgba(255,255,255,0.07) var(--gyro-mid, 50%), transparent calc(var(--gyro-mid, 50%) + 40%))"
                     }}
                   />
 
-                  {/* Elevate inner content above the glare using relative z-10 */}
+                  {/* 2. Interactive Spotlight: Invisible by default. Becomes visible only when Desktop Hovering or actively touching on Mobile. */}
+                  <div 
+                    className="absolute inset-0 pointer-events-none z-0 transition-opacity duration-300 opacity-0 group-hover:opacity-100 [.is-touching_&]:opacity-100"
+                    style={{
+                      background: "radial-gradient(circle at var(--card-x, 50%) var(--card-y, 50%), rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 30%, transparent 60%)"
+                    }}
+                  />
+
                   <div className="relative z-10 flex items-center gap-4 flex-1 min-w-0">
                     <div className="icon-shell flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] group-hover:border-[#3a3a3a] transition-colors duration-300 text-white">
                       <IconComponent type={link.icon} />
@@ -591,10 +596,7 @@ export default function ContactsApp() {
           ))}
         </div>
 
-        {/* Dynamic Controls Container: Renders inline underneath card stack on mobile; vanishes on desktop */}
         <div className="mt-8 flex flex-col items-center gap-4 w-full md:hidden">
-          
-          {/* Horizontal Slider Module */}
           <div 
             className={`w-full bg-[#0a0a0a]/80 backdrop-blur-md px-6 py-4 rounded-xl border border-[#2a2a2a] shadow-xl flex items-center gap-4 h-[54px] transition-all duration-300 ${
               isParallaxEnabled ? "opacity-40" : "opacity-100"
@@ -616,7 +618,6 @@ export default function ContactsApp() {
             />
           </div>
 
-          {/* Toggle Module placed directly below horizontal dragger */}
           <button 
             onClick={() => {
               if (orientationStatusRef.current === "unknown") {
@@ -645,10 +646,7 @@ export default function ContactsApp() {
         </div>
       </div>
 
-      {/* Floating Viewport Controls: Hidden on Mobile, Fixed at desktop bottom-right layout bounds */}
       <div className="hidden md:fixed md:bottom-6 md:right-6 md:z-50 md:flex md:items-end md:gap-3 md:pointer-events-none">
-        
-        {/* Symmetrical Vertical Slider Box */}
         <div 
           className={`bg-[#0a0a0a]/80 backdrop-blur-md px-3 pt-6 pb-4 rounded-xl border border-[#2a2a2a] shadow-xl pointer-events-auto transition-all duration-300 flex flex-col items-center h-[200px] w-[52px] ${
             isParallaxEnabled ? "opacity-40" : "opacity-100"
@@ -672,7 +670,6 @@ export default function ContactsApp() {
           <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-4 select-none">SPD</span>
         </div>
 
-        {/* Floating Parallax Toggle */}
         <button 
           onClick={() => {
             if (orientationStatusRef.current === "unknown") {
