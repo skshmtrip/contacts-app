@@ -256,13 +256,13 @@ export default function ContactsApp() {
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
     const onGlobalPointerMove = async (e: PointerEvent) => {
+      // Removed the early return for parallaxSettings so glare works when 3D is OFF
       if (
         e.pointerType !== "mouse" || 
         e.buttons !== 0 || 
-        reducedMotionRef.current || 
-        !parallaxSettings.current.enabled
+        reducedMotionRef.current
       ) return;
 
       if (isGyroActiveRef.current) {
@@ -273,8 +273,14 @@ export default function ContactsApp() {
       const cy = window.innerHeight / 2;
       const dx = (e.clientX - cx) / cx;
       const dy = (e.clientY - cy) / cy;
-      const dynamicDuration = getDynamicDuration();
 
+      // 1. ALWAYS broadcast pointer position for the reflection overlay
+      window.dispatchEvent(new CustomEvent('update-gyro-light', { detail: { dx, dy } }));
+
+      // 2. Block 3D structural transformations if Parallax is OFF
+      if (!parallaxSettings.current.enabled) return;
+
+      const dynamicDuration = getDynamicDuration();
       const { animate } = await getAnime();
       
       if (mainWrapperRef.current) {
