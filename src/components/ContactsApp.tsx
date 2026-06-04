@@ -202,7 +202,6 @@ export default function ContactsApp() {
   // Calculate dynamic duration: 100% = 25ms (fastest), 1% = 400ms (slowest)
   const getDynamicDuration = () => {
     const speed = parallaxSettings.current.speedPercent;
-    // We invert the math: subtract the speed factor from the maximum duration (400ms)
     return Math.round(400 - (speed - 1) * (375 / 99));
   };
 
@@ -211,10 +210,8 @@ export default function ContactsApp() {
 
     if (!orientationHandlerRef.current) {
       orientationHandlerRef.current = async (event: DeviceOrientationEvent) => {
-        // Bail out immediately if there is no real hardware data.
         if (event.gamma === null || event.beta === null) return;
         
-        // Flag that real mobile tilt data is actively streaming
         isGyroActiveRef.current = true;
 
         if (reducedMotionRef.current || !parallaxSettings.current.enabled) return;
@@ -251,7 +248,6 @@ export default function ContactsApp() {
 
   useEffect(() => {
     const onGlobalPointerMove = async (e: PointerEvent) => {
-      // If a physical mouse is moving, we ALWAYS track it.
       if (
         e.pointerType !== "mouse" || 
         e.buttons !== 0 || 
@@ -259,7 +255,6 @@ export default function ContactsApp() {
         !parallaxSettings.current.enabled
       ) return;
 
-      // If we detect a mouse moving, we explicitly tell the gyro to stand down.
       if (isGyroActiveRef.current) {
          isGyroActiveRef.current = false;
       }
@@ -482,6 +477,13 @@ export default function ContactsApp() {
         if (parallaxSettings.current.enabled) resetParallaxPosition();
       }}
     >
+      {/* Property ownership statement indicator layer */}
+      <div className="absolute top-6 right-6 z-50 pointer-events-none opacity-25">
+        <p className="text-[10px] md:text-xs font-sans text-white uppercase tracking-widest">
+          this site is under the property of saksham tripathi
+        </p>
+      </div>
+
       <div 
         ref={bgWrapperRef}
         className="absolute inset-0 overflow-hidden pointer-events-none"
@@ -615,7 +617,6 @@ export default function ContactsApp() {
           </div>
           <span className="text-[10px] font-mono font-medium tracking-widest text-[#a0a0a0] uppercase mt-4 select-none">SPD</span>
         </div>
-
 
         {/* Floating Parallax Toggle */}
         <button 
