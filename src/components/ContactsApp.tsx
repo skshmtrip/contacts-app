@@ -477,9 +477,9 @@ export default function ContactsApp() {
         if (parallaxSettings.current.enabled) resetParallaxPosition();
       }}
     >
-      {/* Property ownership statement indicator layer — optimized to be extra small and subtle */}
+      {/* Property notice — microscale formatting for a highly minimal identity watermark */}
       <div className="absolute top-6 right-6 z-50 pointer-events-none opacity-25">
-        <p className="text-[9px] md:text-[10px] font-sans font-light text-white uppercase tracking-widest">
+        <p className="text-[5px] md:text-[6px] font-sans font-light text-white uppercase tracking-[0.25em]">
           this site is under the property of saksham tripathi
         </p>
       </div>
