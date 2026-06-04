@@ -149,8 +149,9 @@ export default function ContactsApp() {
     };
   }, []);
 
-  // System Prefs
+  // System Prefs & Pre-warm AnimeJS
   useEffect(() => {
+    getAnime(); // Pre-load to prevent async lag on first gyro tick
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const syncReducedMotion = () => { reducedMotionRef.current = mediaQuery.matches; };
     syncReducedMotion();
@@ -165,7 +166,8 @@ export default function ContactsApp() {
   }, []);
 
   const requestSafariPermission = async (): Promise<boolean> => {
-    if (typeof window === "undefined" || orientationStatusRef.current !== "unknown") return false;
+    if (typeof window === "undefined" || orientationStatusRef.current === "granted") return true;
+    
     const OrientationEvent = window.DeviceOrientationEvent as DeviceOrientationEventWithPermission | undefined;
 
     if (OrientationEvent && typeof OrientationEvent.requestPermission === "function") {
@@ -175,7 +177,9 @@ export default function ContactsApp() {
         if (permissionState === "granted") startGlobalDeviceTilt();
         return permissionState === "granted";
       } catch (error) {
-        orientationStatusRef.current = "denied";
+        // If it throws (usually because it wasn't a valid synchronous user gesture), 
+        // reset to "unknown" so we don't permanently lock them out on subsequent taps.
+        orientationStatusRef.current = "unknown";
         return false;
       }
     } else {
@@ -186,16 +190,19 @@ export default function ContactsApp() {
   };
 
   useEffect(() => {
-    const handleGlobalClick = () => {
+    const handleGlobalInteraction = () => {
       if (orientationStatusRef.current === "unknown" && parallaxSettings.current.enabled) {
         requestSafariPermission();
       }
     };
-    window.addEventListener("click", handleGlobalClick, { once: true });
-    window.addEventListener("touchstart", handleGlobalClick, { once: true });
+    
+    // Only listen to direct click/tap endpoints, swiping/touching-to-scroll breaks iOS permission requests
+    window.addEventListener("click", handleGlobalInteraction);
+    window.addEventListener("touchend", handleGlobalInteraction);
+    
     return () => {
-      window.removeEventListener("click", handleGlobalClick);
-      window.removeEventListener("touchstart", handleGlobalClick);
+      window.removeEventListener("click", handleGlobalInteraction);
+      window.removeEventListener("touchend", handleGlobalInteraction);
     };
   }, []);
 
@@ -471,13 +478,13 @@ export default function ContactsApp() {
 
   return (
     <div
-      className="min-h-[100dvh] bg-[#050505] relative overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row items-center justify-start md:justify-center p-6 md:p-0 select-none touch-action-none"
+      className="min-h-[100dvh] bg-[#050505] relative overflow-y-auto overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row items-center justify-start md:justify-center p-6 md:p-0 select-none"
       style={{ perspective: "1600px" }}
       onPointerLeave={() => {
         if (parallaxSettings.current.enabled) resetParallaxPosition();
       }}
     >
-      {/* Visual Identity Watermark Layer — Uses transform: scale() to override browser minimum font limits safely */}
+      {/* Visual Identity Watermark Layer */}
       <div 
         className="absolute top-6 right-6 z-50 pointer-events-none opacity-25 origin-top-right select-none"
         style={{ transform: "scale(0.55)" }}
@@ -503,7 +510,7 @@ export default function ContactsApp() {
 
       <div 
         ref={mainWrapperRef} 
-        className="w-full max-w-2xl mt-12 mb-6 md:my-0 md:px-8 relative z-10 flex-shrink-0 touch-action-none"
+        className="w-full max-w-2xl mt-12 mb-6 md:my-0 md:px-8 relative z-10 flex-shrink-0"
         style={{ transformStyle: "preserve-3d", willChange: "transform", transform: "scale(0.85)" }}
       >
         <div className="mb-14 md:mb-20" style={{ transform: "translateZ(40px)" }}>
@@ -572,7 +579,13 @@ export default function ContactsApp() {
 
           {/* Toggle Module placed directly below horizontal dragger */}
           <button 
-            onClick={() => setIsParallaxEnabled(!isParallaxEnabled)}
+            onClick={() => {
+              // Explicit fail-safe: Actively request permission on physical button tap if it missed the global listener
+              if (orientationStatusRef.current === "unknown") {
+                requestSafariPermission();
+              }
+              setIsParallaxEnabled(!isParallaxEnabled);
+            }}
             className={`w-full flex items-center justify-center h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
               isParallaxEnabled 
                 ? "bg-white text-black border-white" 
@@ -623,7 +636,12 @@ export default function ContactsApp() {
 
         {/* Floating Parallax Toggle */}
         <button 
-          onClick={() => setIsParallaxEnabled(!isParallaxEnabled)}
+          onClick={() => {
+            if (orientationStatusRef.current === "unknown") {
+              requestSafariPermission();
+            }
+            setIsParallaxEnabled(!isParallaxEnabled);
+          }}
           className={`pointer-events-auto flex items-center justify-center px-4 h-12 rounded-xl backdrop-blur-md border transition-all duration-300 shadow-xl ${
             isParallaxEnabled 
               ? "bg-white text-black border-white hover:bg-[#e0e0e0]" 
