@@ -477,9 +477,12 @@ export default function ContactsApp() {
         if (parallaxSettings.current.enabled) resetParallaxPosition();
       }}
     >
-      {/* Property notice — microscale formatting for a highly minimal identity watermark */}
-      <div className="absolute top-6 right-6 z-50 pointer-events-none opacity-25">
-        <p className="text-[5px] md:text-[6px] font-sans font-light text-white uppercase tracking-[0.25em]">
+      {/* Visual Identity Watermark Layer — Uses transform: scale() to override browser minimum font limits safely */}
+      <div 
+        className="absolute top-6 right-6 z-50 pointer-events-none opacity-25 origin-top-right select-none"
+        style={{ transform: "scale(0.55)" }}
+      >
+        <p className="text-xs font-sans font-light text-white uppercase tracking-[0.2em] whitespace-nowrap">
           this site is under the property of saksham tripathi
         </p>
       </div>
