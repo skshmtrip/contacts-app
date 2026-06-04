@@ -112,6 +112,8 @@ export default function ContactsApp() {
         ease: "easeOutCubic" 
       });
     }
+    // Fire event to reset card glares
+    window.dispatchEvent(new CustomEvent('update-gyro-light', { detail: { dx: 0, dy: 0 } }));
   };
 
   // Keep refs in sync with state for event loops
@@ -177,8 +179,6 @@ export default function ContactsApp() {
         if (permissionState === "granted") startGlobalDeviceTilt();
         return permissionState === "granted";
       } catch (error) {
-        // If it throws (usually because it wasn't a valid synchronous user gesture), 
-        // reset to "unknown" so we don't permanently lock them out on subsequent taps.
         orientationStatusRef.current = "unknown";
         return false;
       }
@@ -228,6 +228,9 @@ export default function ContactsApp() {
         const dx = gamma / 35;
         const dy = beta / 35;
         const dynamicDuration = getDynamicDuration();
+
+        // Broadcast gyro orientation to any listening cards for the reflection overlay
+        window.dispatchEvent(new CustomEvent('update-gyro-light', { detail: { dx, dy } }));
 
         const { animate } = await getAnime();
 
@@ -324,18 +327,23 @@ export default function ContactsApp() {
     return () => { cancelled = true; cancelDecode?.(); };
   }, []);
 
-  // Card interaction logic
+  // Card interaction & glare logic
   const setupCardEffects = (el: HTMLDivElement | null) => {
     if (!el) return;
     let glowAnimation: { pause: () => void } | null = null;
     let isCurrentlyTouching = false;
 
+    // Handles the inner glare gradient coordinates
     const setPointerLight = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
       const pointerX = ((clientX - rect.left) / rect.width) * 100;
       const pointerY = ((clientY - rect.top) / rect.height) * 100;
       el.style.setProperty("--card-x", `${pointerX}%`);
       el.style.setProperty("--card-y", `${pointerY}%`);
+      
+      // Override Gyro coordinates if actively hovering/touching
+      el.style.setProperty("--glare-x", `${pointerX}%`);
+      el.style.setProperty("--glare-y", `${pointerY}%`);
     };
 
     const handleScrollUpdate = () => {
@@ -343,7 +351,24 @@ export default function ContactsApp() {
         setPointerLight(lastPointerRef.current.x, lastPointerRef.current.y);
       }
     };
+    
+    // Listen for the global gyro event to sweep the reflection across the card
+    const handleGyroUpdate = (e: Event) => {
+      // Don't fight the mouse/touch position if the user is directly interacting with the card
+      if (isCurrentlyTouching || el.matches(':hover')) return;
+
+      const customEvent = e as CustomEvent<{ dx: number; dy: number }>;
+      const { dx, dy } = customEvent.detail;
+      
+      // Invert the trajectory multiplier to simulate a natural light reflection
+      const gx = (-dx * 120) + 50; 
+      const gy = (-dy * 120) + 50;
+      el.style.setProperty("--glare-x", `${gx}%`);
+      el.style.setProperty("--glare-y", `${gy}%`);
+    };
+
     window.addEventListener('update-orb-scroll', handleScrollUpdate);
+    window.addEventListener('update-gyro-light', handleGyroUpdate);
 
     const startGlow = async () => {
       if (glowAnimation) return;
@@ -432,6 +457,7 @@ export default function ContactsApp() {
 
     return () => {
       window.removeEventListener('update-orb-scroll', handleScrollUpdate);
+      window.removeEventListener('update-gyro-light', handleGyroUpdate);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerenter", onPointerEnter);
       el.removeEventListener("pointerleave", onPointerLeave);
@@ -531,8 +557,21 @@ export default function ContactsApp() {
               className="contact-card block group transition-all duration-300" style={{ opacity: 0 }}
             >
               <div className="bezel-outer p-1 transition-shadow duration-300 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]" ref={setupCardEffects}>
-                <div className="bezel-inner p-5 md:p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                
+                {/* Notice the relative & overflow-hidden added to bezel-inner to contain the glare */}
+                <div className="bezel-inner relative overflow-hidden p-5 md:p-6 bg-[#0a0a0a] flex items-center justify-between gap-4">
+                  
+                  {/* NEW Interactive Glare / Light Reflection Layer */}
+                  <div 
+                    className="absolute inset-0 pointer-events-none z-0 transition-opacity duration-300 opacity-60 group-hover:opacity-100"
+                    style={{
+                      // var(--glare-x/y) falls back to slightly off-center top if untouched 
+                      background: "radial-gradient(circle at var(--glare-x, 50%) var(--glare-y, -20%), rgba(255,255,255,0.075) 0%, transparent 60%)"
+                    }}
+                  />
+
+                  {/* Elevate inner content above the glare using relative z-10 */}
+                  <div className="relative z-10 flex items-center gap-4 flex-1 min-w-0">
                     <div className="icon-shell flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111111] group-hover:border-[#3a3a3a] transition-colors duration-300 text-white">
                       <IconComponent type={link.icon} />
                     </div>
@@ -541,7 +580,7 @@ export default function ContactsApp() {
                       <p className="text-sm md:text-base text-white font-medium truncate">{link.value}</p>
                     </div>
                   </div>
-                  <div className="card-arrow flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
+                  <div className="relative z-10 card-arrow flex-shrink-0 text-[#a0a0a0] group-hover:text-white group-hover:translate-x-1 transition-all duration-300">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
                     </svg>
@@ -580,7 +619,6 @@ export default function ContactsApp() {
           {/* Toggle Module placed directly below horizontal dragger */}
           <button 
             onClick={() => {
-              // Explicit fail-safe: Actively request permission on physical button tap if it missed the global listener
               if (orientationStatusRef.current === "unknown") {
                 requestSafariPermission();
               }
